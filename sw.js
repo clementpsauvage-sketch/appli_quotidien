@@ -1,4 +1,4 @@
-const CACHE_NAME = 'zenith-v2';
+const CACHE_NAME = 'zenith-v3';
 const ASSETS = [
     './',
     './index.html',
@@ -6,8 +6,8 @@ const ASSETS = [
     './app.js',
     './db.js',
     './manifest.json',
-    './icone-192.png',
-    './icone-512.png'
+    './icon-192.png',
+    './icon-512.png'
   // Ajoute ici tes icônes ou sons si tu en as
 ];
 
