@@ -2055,19 +2055,32 @@ async function updateGoalsDashboard() {
     
     // --- 2. WEEKLY ---
     let weeklyHtml = `<h3 class="text-[10px] font-bold text-blue-500 uppercase tracking-widest mb-3 mt-6">Volume Weekly</h3>`;
+
     weeklyGoals.forEach(g => {
+        // On filtre les logs par date ET par type (ex: 'Run' ou 'Escalade')
         const relevant = logs.filter(l => new Date(l.timestamp) >= startWeek && l.type === g.type);
         let val = 0;
         
+        // CAS 1 : La Course (ou autre activité à distance)
         if (g.unit === "km") {
             val = relevant.reduce((acc, l) => acc + (parseFloat(l.distance) || 0), 0);
-        } else if (g.fingers) {
+        } 
+        // CAS 2 : Les suspensions (Fingers/Hangboard)
+        else if (g.fingers) {
             val = Math.max(...relevant.filter(l => l.fingers == g.fingers).map(l => parseInt(l.work) || 0), 0);
-        } else if (g.unit === "top" && g.color) {
-            // On compte les succès dans les détails (laps) pour la couleur donnée
+        } 
+        // CAS 3 : Les Blocs d'escalade (recherche par couleur dans 'level')
+        else if (g.unit === "top" && g.color) {
             relevant.forEach(l => {
                 if (l.details && Array.isArray(l.details)) {
-                    val += l.details.filter(lap => lap.color === g.color && lap.success).length;
+                    // On filtre les succès qui correspondent à la couleur demandée
+                    val += l.details.filter(lap => {
+                        // On cherche dans 'level' (ta nouvelle version) ou 'color' (l'ancienne)
+                        const lapColor = (lap.level || lap.color || "").toLowerCase().trim();
+                        const goalColor = g.color.toLowerCase().trim();
+                        
+                        return lapColor === goalColor && lap.success === true;
+                    }).length;
                 }
             });
         }
@@ -2075,7 +2088,6 @@ async function updateGoalsDashboard() {
         checkSuccess(val, g.target);
         weeklyHtml += renderGoalBar(g.label, val, g.target, g.unit, 'blue');
     });
-
     // --- 3. ELITE ---
     let eliteHtml = `<h3 class="text-[10px] font-bold text-violet-500 uppercase tracking-widest mb-3 mt-6">Performance Elite</h3>`;
     eliteGoals.forEach(g => {
