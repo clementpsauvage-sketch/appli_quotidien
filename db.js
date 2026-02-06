@@ -1,21 +1,34 @@
 // Gestion du stockage local
+const db = new Dexie("ZenithDB");
+
+// On définit le schéma : '++id' est automatique, les autres sont indexés
+db.version(1).stores({
+    logs: '++id, timestamp, type, exercise'
+});
+
 const DB = {
-    saveLog: (entry) => {
-        let logs = JSON.parse(localStorage.getItem('zenith_logs')) || [];
-        // On ajoute un ID unique et une date précise
+    // Sauvegarder (Asynchrone)
+    saveLog: async (entry) => {
         const fullEntry = {
             ...entry,
-            id: Date.now(),
             timestamp: new Date().toISOString()
         };
-        logs.unshift(fullEntry);
-        localStorage.setItem('zenith_logs', JSON.stringify(logs));
+        return await db.logs.add(fullEntry);
     },
-    getLogs: () => JSON.parse(localStorage.getItem('zenith_logs')) || [],
 
-    saveGoals: (goals) => localStorage.setItem('zenith_goals', JSON.stringify(goals)),
-    getGoals: () => JSON.parse(localStorage.getItem('zenith_goals')) || [
-        { id: 'pullup_1arm', label: 'Traction 1 bras', target: 1, current: 0, unit: 'nb' },
-        { id: 'run_10k', label: '10km en 43min', target: 43, current: 55, unit: 'min' }
-    ]
+    // Récupérer tous les logs (Triage par date décroissante)
+    getLogs: async () => {
+        return await db.logs.orderBy('timestamp').reverse().toArray();
+    },
+
+
+    deleteLog: async (id) => {
+        // Dexie a besoin que l'ID soit un nombre si c'est un auto-incrément
+        const numericId = parseInt(id);
+        return await db.logs.delete(numericId);
+    },
+    updateLog: async (id, updatedFields) => {
+        const numericId = parseInt(id);
+        return await db.logs.update(numericId, updatedFields);
+    }
 };

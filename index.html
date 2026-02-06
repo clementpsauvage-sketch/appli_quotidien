@@ -18,6 +18,16 @@
             <i data-lucide="calendar" onclick="showSection('objectifs')" class="w-6 h-6 text-slate-400 cursor-pointer hover:text-violet-400 transition-colors"></i>
             <i data-lucide="settings" class="w-6 h-6 text-slate-400"></i>
         </div>
+        <div class="mt-6 p-4 glass rounded-3xl border border-amber-500/30 bg-amber-500/5">
+            <h3 class="text-amber-400 font-bold text-sm mb-2 flex items-center gap-2">
+                <i data-lucide="database" class="w-4 h-4"></i>
+                Anciennes données détectées ?
+            </h3>
+            <p class="text-xs text-slate-400 mb-4">Si tes anciennes séances n'apparaissent pas dans les stats, clique sur le bouton ci-dessous pour les transférer vers la nouvelle base de données.</p>
+            <button onclick="migrateFromLocalStorage()" class="w-full py-3 bg-amber-500 hover:bg-amber-600 text-white rounded-2xl font-bold text-sm transition-all shadow-lg shadow-amber-500/20">
+                Transférer mes données (Migration)
+            </button>
+        </div>
     </header>
 
     <main id="app-content" class="p-4 max-w-md mx-auto">
@@ -276,11 +286,19 @@
                     </button>
                 </div>
 
-                <div class="relative min-h-[200px]">
-                    <div id="wrapper-mainChart" class="chart-wrapper"><canvas id="mainChart"></canvas></div>
-                    <div id="wrapper-runChart" class="chart-wrapper hidden"><canvas id="runChart"></canvas></div>
-                    <div id="wrapper-statsChart" class="chart-wrapper hidden"><canvas id="statsChart"></canvas></div>
-                    <div id="wrapper-volumeChart" class="chart-wrapper hidden"><canvas id="volumeChart"></canvas></div>
+                <div class="relative min-h-[350px] w-full">
+                    <div id="wrapper-mainChart" class="chart-wrapper w-full h-[350px] flex items-center justify-center"><canvas id="mainChart"></canvas></div>
+                    <div id="wrapper-runChart" class="chart-wrapper hidden w-full h-[350px] flex items-center justify-center"><canvas id="runChart"></canvas></div>
+                    <div id="wrapper-statsChart" class="chart-wrapper hidden w-full h-[350px] flex items-center justify-center"><canvas id="statsChart"></canvas></div>
+                    <div id="wrapper-climbEvolutionChart" class="chart-wrapper hidden w-full h-[350px] flex items-center justify-center"><canvas id="climbEvolutionChart"></canvas></div>
+                    <div id="wrapper-volumeChart" class="chart-wrapper hidden w-full h-[350px] flex items-center justify-center"><canvas id="volumeChart"></canvas></div>
+                    <div id="wrapper-fatigueChart" class="chart-wrapper hidden w-full h-[350px] flex items-center justify-center"><canvas id="fatigueChart"></canvas></div>
+                    <div id="wrapper-scatterChart" class="chart-wrapper hidden w-full h-[350px] flex items-center justify-center"><canvas id="scatterChart"></canvas></div>
+                    <div id="wrapper-radarChart" class="chart-wrapper hidden w-full h-[350px] flex items-center justify-center">
+                        <div style="width: 100%; max-width: 400px; height: 100%;">
+                            <canvas id="radarChart"></canvas>
+                        </div>
+                    </div>
                 </div>
             </div>
             
@@ -301,6 +319,7 @@
                 <button onclick="renderLogs('Course')" class="text-[10px] bg-slate-800 px-3 py-1 rounded-full border border-white/10">Course</button>
                 <button onclick="renderLogs('Musique')" class="text-[10px] bg-slate-800 px-3 py-1 rounded-full border border-white/10">Musique</button>
                 <button onclick="renderLogs('Étirement')" class="text-[10px] bg-slate-800 px-3 py-1 rounded-full border border-white/10">Zen</button>
+                <button onclick="renderLogs('Escalade')" class="text-[10px] bg-slate-800 px-3 py-1 rounded-full border border-white/10">Escalade</button>
             </div>
             <h3 class="text-xs font-bold text-slate-500 uppercase mb-4 tracking-widest">Dernières Séances</h3>
             <div id="log-list" class="space-y-3">
@@ -320,12 +339,74 @@
             <div id="goals-container" class="grid gap-4">
                 </div>
         </section>
+        <section id="section-escalade" class="hidden p-4 space-y-6">
+            <div id="climb-setup" class="glass p-6 rounded-3xl border border-white/10">
+                <h2 class="text-xl font-black mb-4 uppercase tracking-tighter">Nouvelle Séance</h2>
+                <div class="grid grid-cols-2 gap-4">
+                    <button onclick="startClimb('Bloc')" class="p-4 bg-slate-800 rounded-2xl border border-white/5 hover:border-violet-500 transition-all text-center">
+                        <span class="block text-2xl mb-1">🧗</span>
+                        <span class="font-bold text-sm">Bloc</span>
+                    </button>
+                    <button onclick="startClimb('Voie')" class="p-4 bg-slate-800 rounded-2xl border border-white/5 hover:border-violet-500 transition-all text-center">
+                        <span class="block text-2xl mb-1">🚠</span>
+                        <span class="font-bold text-sm">Voie</span>
+                    </button>
+                </div>
+            </div>
+
+            <div id="climb-active" class="hidden space-y-4">
+                <div class="flex justify-between items-center bg-slate-900/80 p-4 rounded-2xl border border-white/5">
+                    <span id="climb-type-display" class="font-black text-violet-400 uppercase text-xs tracking-widest">BLOC</span>
+                    <div class="flex items-center gap-2">
+                        <input type="number" id="climb-duration-input" placeholder="0" class="w-12 bg-transparent border-b border-violet-500 text-center text-sm text-white outline-none">
+                        <span class="text-[10px] text-slate-500 uppercase">min</span>
+                    </div>
+                </div>
+
+                <div class="glass p-4 rounded-3xl border border-white/10 space-y-4">
+                    <div class="flex items-center justify-between bg-white/5 p-2 rounded-xl">
+                        <span class="text-[10px] font-bold text-slate-400 uppercase ml-2">Résultat ?</span>
+                        <div class="flex gap-2">
+                            <button onclick="setClimbStatus(true)" id="btn-success" class="px-4 py-1 rounded-lg bg-emerald-500/20 text-emerald-500 border border-emerald-500/50 text-xs font-bold transition-all">OUI</button>
+                            <button onclick="setClimbStatus(false)" id="btn-fail" class="px-4 py-1 rounded-lg bg-slate-800 text-slate-500 text-xs font-bold transition-all">NON</button>
+                        </div>
+                    </div>
+
+                    <div>
+                        <p class="text-[10px] font-bold text-slate-500 uppercase mb-3 px-1">Difficulté</p>
+                        <div id="climb-levels-grid" class="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
+                            </div>
+                    </div>
+
+                    <div class="flex justify-between items-center bg-white/5 p-3 rounded-xl">
+                        <span class="text-[10px] font-bold text-slate-400 uppercase">Ressenti (1-5)</span>
+                        <input type="range" id="climb-effort" min="1" max="5" value="3" class="w-1/2 accent-violet-500">
+                    </div>
+
+                    <button onclick="addClimbLap()" class="w-full py-4 bg-white text-black rounded-2xl font-black text-sm uppercase italic shadow-lg active:scale-95 transition-transform">
+                        Valider l'essai
+                    </button>
+                </div>
+
+                <div id="climb-laps" class="space-y-3 mt-4 max-h-[35vh] overflow-y-auto no-scrollbar">
+                    </div>
+
+                <button onclick="finishClimbSession()" class="w-full py-4 bg-red-500/10 border border-red-500/30 text-red-500 rounded-3xl font-black uppercase text-[10px] tracking-[0.2em] hover:bg-red-500/20 transition-colors">
+                    Terminer la séance
+                </button>
+            </div>
+        </section>
     </main>
 
-    <nav class="fixed bottom-0 left-0 right-0 glass border-t border-white/5 px-6 py-4 flex justify-between items-center z-50">
-        <button onclick="showSection('muscu')" class="flex flex-col items-center gap-1 text-violet-500">
+    <nav class="fixed bottom-0 left-0 right-0 glass border-t border-white/5 px-4 py-4 flex overflow-x-auto no-scrollbar gap-8 items-center z-50 justify-start md:justify-center">
+        <button onclick="showSection('muscu')" class="flex-shrink-0 flex flex-col items-center gap-1 text-violet-500">
             <i data-lucide="armchair" class="w-6 h-6"></i>
             <span class="text-[10px] font-bold">Muscu</span>
+        </button>
+        
+        <button onclick="showSection('escalade')" class="flex-shrink-0 flex flex-col items-center gap-1 text-slate-400">
+            <i data-lucide="mountain" class="w-6 h-6"></i>
+            <span class="text-[10px]">Grimpe</span>
         </button>
         <button onclick="showSection('musique')" class="flex flex-col items-center gap-1 text-slate-400">
             <i data-lucide="music" class="w-6 h-6"></i>
@@ -343,9 +424,11 @@
             <i data-lucide="bar-chart-3" class="w-6 h-6"></i>
             <span class="text-[10px]">Stats</span>
         </button>
-        
     </nav>
+    
+    
 
+    <script src="https://unpkg.com/dexie/dist/dexie.js"></script>
     <script src="db.js"></script>
     <script src="app.js"></script>
 </body>

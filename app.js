@@ -1,11 +1,24 @@
 // --- INITIALISATION ---
 let pendingData = null; // Stocke la séance en attente de pastille
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     lucide.createIcons();
-    initChart();
-    renderLogs(); // Charge les logs au démarrage
+    
+    // On attend que les données soient chargées avant de dessiner
+    await renderLogs(); 
+    await updateGoalsDashboard();
 });
 
+if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+            navigator.serviceWorker.register('./sw.js')
+                .then(reg => {
+                console.log('Le gardien (Service Worker) est bien installé !');
+                })
+                .catch(err => {
+                console.log('Échec de l\'installation du gardien :', err);
+                });
+            });
+        }
 // --- NAVIGATION ---
 function showSection(id) {
     // Masquer toutes les sections
@@ -297,7 +310,6 @@ function showMoodSelector(data) {
     pendingData = data;
 
     // 2. On bascule sur la section qui contient le conteneur de mood
-    // On utilise la section 'muscu' comme base de validation
     showSection('muscu');
     
     // 3. On cache le menu de muscu et on montre la zone active
@@ -309,10 +321,19 @@ function showMoodSelector(data) {
     
     // On adapte le petit texte de résumé selon le type
     let summary = "";
-    if (data.type === 'Musique') summary = `${data.instrument} • ${data.duration}`;
-    else if (data.type === 'Course') summary = `${data.distance} km`;
-    else if (data.type === 'Étirement') summary = data.routine;
-    else summary = `${data.totalReps || 0}s de travail`;
+    if (data.type === 'Musique') {
+        summary = `${data.instrument} • ${data.duration}`;
+    } else if (data.type === 'Course') {
+        summary = `${data.distance} km`;
+    } else if (data.type === 'Étirement') {
+        summary = data.routine;
+    } else if (data.type === 'Escalade') {
+        // AJOUT : Résumé pour l'escalade (nombre de blocs/voies)
+        const count = data.details ? data.details.length : 0;
+        summary = `${data.exercise} • ${count} ascension${count > 1 ? 's' : ''}`;
+    } else {
+        summary = `${data.totalReps || 0}s de travail`;
+    }
 
     container.innerHTML = `
         <div class="glass p-8 rounded-3xl text-center">
@@ -327,7 +348,7 @@ function showMoodSelector(data) {
             <div class="flex justify-between mb-10">
                 ${[1, 2, 3, 4, 5].map(m => `
                     <button onclick="finalSave2(${m})" 
-                            class="mood-btn mood-${m} hover:scale-110 transition-transform">
+                            class="mood-btn mood-${m} hover:scale-110 transition-transform shadow-lg">
                     </button>
                 `).join('')}
             </div>
@@ -446,68 +467,127 @@ function renderStretchDetails(log) {
     `;
 }
 
-// --- FONCTION PRINCIPALE (Chef d'orchestre) ---
-function renderLogs(filter = 'all') {
+// --- MOTEUR 5 : ESCALADE ---
+
+function renderClimbingDetails(log) {
+    const details = log.details || [];
+    const totalEssais = details.length; // Nombre total de tentatives
+    const successes = details.filter(d => d.success).length;
+    const fails = totalEssais - successes;
+    
+    // 1. On groupe les données par difficulté
+    const statsByLevel = details.reduce((acc, d) => {
+        if (!acc[d.level]) acc[d.level] = { success: 0, fail: 0 };
+        if (d.success) acc[d.level].success++;
+        else acc[d.level].fail++;
+        return acc;
+    }, {});
+
+    const arkoseColors = {
+        'Jaune': '#fbbf24', 'Vert': '#4ade80', 'Bleu': '#60a5fa', 
+        'Rouge': '#f87171', 'Noir': '#1e293b', 'Violet': '#a855f7'
+    };
+
+    // 2. Génération du résumé (ce qu'on voit tout de suite)
+    const summaryHTML = Object.entries(statsByLevel).map(([lvl, stat]) => {
+        const dotColor = arkoseColors[lvl] || '#94a3b8';
+        return `
+            <div class="flex items-center gap-1 bg-white/5 px-2 py-1 rounded-full border border-white/5">
+                <span class="w-2 h-2 rounded-full" style="background-color: ${dotColor}"></span>
+                <span class="text-[10px] font-bold text-white">${lvl}</span>
+                <span class="text-[9px] text-slate-400 ml-1">${stat.success}✅ / ${stat.fail}❌</span>
+            </div>
+        `;
+    }).join('');
+
+    return `
+        <div class="mt-2 space-y-3">
+            <div class="flex flex-wrap items-center gap-2">
+                <div class="bg-violet-500 text-white px-2 py-0.5 rounded-full text-[10px] font-black uppercase shadow-lg shadow-violet-500/20">
+                    ${totalEssais} ESSAIS TOTAUX
+                </div>
+                <div class="flex items-center gap-2 text-[10px] font-bold text-slate-400 border-l border-white/10 pl-2">
+                    <span class="text-emerald-400">${successes}✅</span>
+                    <span class="text-red-400">${fails}❌</span>
+                </div>
+            </div>
+
+            <div id="details-content-${log.id}" class="hidden-details-content mt-3 space-y-2 border-t border-white/5 pt-3">
+                <p class="text-[10px] uppercase font-black text-slate-500 mb-2 italic">Détail de la session :</p>
+                <div class="flex flex-wrap gap-2">
+                ${summaryHTML || '<span class="text-[10px] text-slate-500 italic">Aucune ascension enregistrée</span>'}
+                </div>
+                
+
+                ${log.duration ? `
+                    <div class="flex items-center gap-2 text-slate-500 mt-2">
+                        <i data-lucide="clock" class="w-3 h-3"></i>
+                        <span class="text-[10px]">Durée totale : ${log.duration} minutes</span>
+                    </div>
+                ` : ''}
+            </div>
+        </div>
+    `;
+}
+
+async function renderLogs(filter = 'all') {
     const container = document.getElementById('log-list');
     if (!container) return;
 
     const searchTerm = document.getElementById('log-search')?.value.toLowerCase() || "";
-    let logs = DB.getLogs();
     
-    // 1. Tri par date (on utilise le timestamp pour être précis)
-    logs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    // Récupération des logs depuis Dexie
+    let logs = await DB.getLogs(); 
 
-    // 2. Filtre par onglet et recherche
+    // Filtre par type et recherche textuelle
     const filteredLogs = logs.filter(l => {
-        const matchesType = (filter === 'all' || l.type.toLowerCase().includes(filter.toLowerCase()));
-        const text = (l.type + (l.note || "") + (l.date || "")).toLowerCase();
+        const matchesType = (filter === 'all' || l.type.toLowerCase() === filter.toLowerCase());
+        const text = (l.type + (l.note || "") + (l.exercise || "")).toLowerCase();
         return matchesType && text.includes(searchTerm);
     });
 
     const moodColors = { 1: '#ef4444', 2: '#f97316', 3: '#eab308', 4: '#3b82f6', 5: '#a855f7' };
 
     container.innerHTML = filteredLogs.map(log => {
-        // --- NOUVEAU SYSTÈME DE SELECTION DU MOTEUR ---
         let specificContent = "";
         
-        if (log.type === 'Course') {
-            specificContent = renderRunDetails(log);
-        } else if (log.type === 'Musique') {
-            specificContent = renderMusicDetails(log);
-        }else if (log.type === 'Étirement') {
-            specificContent = renderStretchDetails(log);
-        } else {
-            // Par défaut pour Suspension, Bras 90, Pyramide, etc.
-            specificContent = renderMuscuDetails(log);
+        // Routage du rendu selon le sport
+        switch(log.type) {
+            case 'Course': specificContent = renderRunDetails(log); break;
+            case 'Musique': specificContent = renderMusicDetails(log); break;
+            case 'Étirement': specificContent = renderStretchDetails(log); break;
+            case 'Escalade': specificContent = renderClimbingDetails(log); break;
+            default: specificContent = renderMuscuDetails(log);
         }
-        // ----------------------------------------------
-        // On récupère la date soit du champ date, soit du timestamp
+
         const displayDate = log.date || new Date(log.timestamp).toLocaleDateString('fr-FR');
+        // Sécurité pour l'ID (Dexie utilise .id)
+        const logId = log.id; 
 
         return `
             <div class="glass p-4 rounded-2xl border-l-4 mb-3 cursor-pointer transition-all active:scale-[0.98]" 
                 style="border-color: ${moodColors[log.mood] || '#475569'}" 
-                onclick="toggleComment('${log.id}')">
+                onclick="toggleComment('${logId}')">
                 
                 <div class="flex justify-between items-start mb-2">
                     <p class="text-sm font-bold text-white">${log.type}</p>
                     <span class="text-[10px] text-slate-500">${displayDate}</span>
                 </div>
 
-                <p class="text-xs text-slate-300 mb-3">${log.note || ''}</p>
+                ${log.note ? `<p class="text-xs text-slate-300 mb-3">${log.note}</p>` : ''}
                 
                 ${specificContent}
 
-                <div id="details-${log.id}" class="hidden mt-3 pt-3 border-t border-white/5">
+                <div id="details-${logId}" class="hidden mt-3 pt-3 border-t border-white/5">
                     <div class="bg-black/20 p-2 rounded-lg text-[10px] text-slate-400 italic mb-3">
                         "${log.comment || 'Aucun commentaire...'}"
                     </div>
                     
                     <div class="flex flex-col gap-2">
-                        <button onclick="addComment(event, '${log.id}')" class="w-full py-2 bg-white/5 rounded-xl text-[10px] text-violet-400 font-bold uppercase">
+                        <button onclick="addComment(event, '${logId}')" class="w-full py-2 bg-white/5 rounded-xl text-[10px] text-violet-400 font-bold uppercase">
                             Modifier la note
                         </button>
-                        <button onclick="deleteLog(event, '${log.id}')" class="w-full py-2 text-[9px] text-red-400/50 uppercase">
+                        <button onclick="deleteLog(event, '${logId}')" class="w-full py-2 text-[9px] text-red-400/50 uppercase">
                             Supprimer la séance
                         </button>
                     </div>
@@ -520,30 +600,79 @@ function renderLogs(filter = 'all') {
 }
 
 function toggleComment(id) {
-    const el = document.getElementById(`details-${id}`);
-    if (el) el.classList.toggle('hidden');
+    // On force l'ID en string car l'ID HTML contient le nombre
+    const details = document.getElementById('details-' + id);
+    if (details) {
+        details.classList.toggle('hidden');
+    }
 }
 
-function addComment(event, id) {
+async function addComment(event, id) {
     event.stopPropagation();
-    const com = prompt("Note de séance :");
-    if (com !== null) {
-        let logs = DB.getLogs();
-        const idx = logs.findIndex(l => l.id == id);
-        if (idx !== -1) {
-            logs[idx].comment = com;
-            localStorage.setItem('zenith_logs', JSON.stringify(logs));
-            renderLogs();
+    
+    const newComment = prompt("Ajouter une note ou un commentaire sur cette séance :");
+    
+    if (newComment !== null) {
+        try {
+            // On met à jour uniquement le champ 'comment' dans IndexedDB
+            await DB.updateLog(id, { comment: newComment });
+            
+            // On rafraîchit l'affichage pour voir le changement
+            await renderLogs();
+            
+            // On réouvre le volet de détails pour que l'utilisateur voit son texte
+            toggleComment(id);
+        } catch (err) {
+            console.error("Erreur mise à jour commentaire:", err);
+            alert("Erreur lors de l'enregistrement du commentaire.");
         }
+    }
+}
+
+async function migrateFromLocalStorage() {
+    try {
+        const oldData = localStorage.getItem('zenith_logs');
+        if (!oldData) {
+            alert("Aucune donnée ancienne trouvée dans ce navigateur.");
+            return;
+        }
+
+        const oldLogs = JSON.parse(oldData);
+        if (oldLogs.length === 0) {
+            alert("Ton ancien historique est vide.");
+            return;
+        }
+
+        // On boucle sur chaque log pour les mettre dans IndexedDB
+        for (let log of oldLogs) {
+            // On supprime l'ancien ID pour que Dexie en génère un nouveau propre
+            const { id, ...cleanLog } = log; 
+            await DB.saveLog(cleanLog);
+        }
+
+        // On nettoie le localStorage pour ne pas migrer deux fois
+        localStorage.removeItem('zenith_logs');
+        
+        alert(`Succès ! ${oldLogs.length} séances ont été migrées.`);
+        location.reload(); // On recharge pour actualiser les stats
+        
+    } catch (err) {
+        console.error("Erreur migration :", err);
+        alert("Une erreur est survenue pendant la migration.");
     }
 }
 
 
 
 
-function updateStatsDashboard() {
-    const logs = DB.getLogs();
-    if (!logs || logs.length === 0) return;
+async function updateStatsDashboard() {
+    // --- NOUVEAU : On attend les logs de la base de données ---
+    const logs = await DB.getLogs(); 
+    
+    if (!logs || logs.length === 0) {
+        console.log("Aucune donnée pour les stats");
+        return;
+    }
 
     // --- 1. STATS PYRAMIDE ---
     const pyramidLogs = logs.filter(l => l.type && l.type.includes('Pyramide'));
@@ -556,35 +685,32 @@ function updateStatsDashboard() {
 
         if(document.getElementById('stat-total-reps')) document.getElementById('stat-total-reps').innerText = totalReps;
         if(document.getElementById('stat-avg-speed')) document.getElementById('stat-avg-speed').innerText = avgSpeed.toFixed(1) + "s";
-        renderProgressionChart(pyramidLogs.slice(0, 10).reverse());
+        
+        // On envoie les 10 derniers à ton graphique
+        if (typeof renderProgressionChart === "function") {
+            renderProgressionChart(pyramidLogs.slice(0, 10).reverse());
+        }
     }
 
-    // --- 2. STATS SUSPENSION (VERSION CORRIGÉE) ---
+    // --- 2. STATS SUSPENSION ---
     const filterEl = document.getElementById('stat-finger-filter');
     const fingerFilter = filterEl ? filterEl.value : 'all';
 
     const hangLogs = logs.filter(l => {
-        const typeLower = l.type.toLowerCase();
-        // On s'assure de ne prendre que ce qui est vraiment de la suspension
-        const isHang = typeLower.includes('suspension') || 
-                        typeLower.includes('deadhang') || 
-                        typeLower.includes('bras 90');
-        
+        const typeLower = (l.type || "").toLowerCase();
+        const isHang = typeLower.includes('suspension') || typeLower.includes('deadhang') || typeLower.includes('bras 90');
         if (!isHang) return false;
         if (fingerFilter === 'all') return true;
         return String(l.fingers) === String(fingerFilter);
     });
 
     const totalSeconds = hangLogs.reduce((acc, l) => {
-        // Priorité absolue au nouveau format totalReps que nous venons de créer
-        // On n'utilise le calcul (cycles * work) que si totalReps est absent
         let volume = 0;
-        if (l.totalReps !== undefined && l.totalReps !== null) {
+        if (l.totalReps != null) {
             volume = parseInt(l.totalReps);
         } else if (l.cycles && l.work) {
             volume = parseInt(l.cycles) * parseInt(l.work);
         }
-        
         return acc + (isNaN(volume) ? 0 : volume);
     }, 0);
 
@@ -596,60 +722,405 @@ function updateStatsDashboard() {
         displayHang.innerText = mins > 0 ? `${mins}m ${secs.toString().padStart(2, '0')}s` : `${secs}s`;
     }
 
-    // Petit bonus : mettre à jour le sous-titre selon le filtre
-    const detailEl = document.getElementById('stat-hang-detail');
-    if (detailEl) {
-        detailEl.innerText = fingerFilter === 'all' ? "Temps total (Global)" : `Temps total (${fingerFilter} doigts)`;
-    }
     // --- 3. STATS COURSE ---
-    const runLogs = logs.filter(l => l.type === 'Course').reverse(); // Du plus vieux au plus récent pour le graph
-
+    const runLogs = logs.filter(l => l.type === 'Course');
     if (runLogs.length > 0) {
-        // Cumul Kilomètres
-        const totalDist = runLogs.reduce((acc, l) => acc + parseFloat(l.distance), 0);
-        document.getElementById('stat-run-total-dist').innerText = totalDist.toFixed(1) + "km";
+        const totalDist = runLogs.reduce((acc, l) => acc + (parseFloat(l.distance) || 0), 0);
+        const distEl = document.getElementById('stat-run-total-dist');
+        if(distEl) distEl.innerText = totalDist.toFixed(1) + "km";
 
-        // Fréquence (30 derniers jours)
         const thirtyDaysAgo = new Date().getTime() - (30 * 24 * 60 * 60 * 1000);
         const recentRuns = runLogs.filter(l => new Date(l.timestamp).getTime() > thirtyDaysAgo);
-        document.getElementById('stat-run-freq').innerText = recentRuns.length;
+        const freqEl = document.getElementById('stat-run-freq');
+        if(freqEl) freqEl.innerText = recentRuns.length;
 
-        // Graphique d'allure
-        renderRunChart(runLogs);
+        if (typeof renderRunChart === "function") renderRunChart(runLogs.slice().reverse());
     }
+
+    // --- 4. AUTRES TOTAUX (MUSIQUE / ZEN) ---
     const totals = logs.reduce((acc, log) => {
         if (log.type === 'Étirement') acc.stretch += (parseInt(log.duration) || 0);
         if (log.type === 'Musique') acc.music += (parseInt(log.duration) || 0);
         return acc;
     }, { stretch: 0, music: 0 });
 
-    // Mise à jour de l'interface avec sécurité sur les IDs
     const stretchEl = document.getElementById('stat-stretch-total');
     const musicEl = document.getElementById('stat-music-total');
-    
     if(stretchEl) stretchEl.innerText = `${Math.round(totals.stretch / 60)} min`;
     if(musicEl) musicEl.innerText = `${Math.round(totals.music / 60)} min`;
 
-    // --- 3. GRAPHIQUE DE RESSENTI ---
+    // --- 5. APPELS DES GRAPHIQUES GENERAUX ---
+    if (typeof renderMainChart === "function") renderMainChart(logs);
+    if (typeof renderVolumeChart === "function") renderVolumeChart(logs);
+
+        // --- 6. STATS ESCALADE ---
+    const climbLogs = logs.filter(l => l.type === 'Escalade' || l.type === 'escalade');
+    if (climbLogs.length > 0) {
+        // Calcul du volume total
+        const totalAttempts = climbLogs.reduce((acc, l) => acc + (l.details ? l.details.length : 0), 0);
+        const totalSuccess = climbLogs.reduce((acc, l) => {
+            return acc + (l.details ? l.details.filter(d => d.success).length : 0);
+        }, 0);
+
+        // Affichage des compteurs (assure-toi que ces IDs existent dans ton HTML)
+        const climbVolEl = document.getElementById('stat-climb-volume');
+        const climbRateEl = document.getElementById('stat-climb-success-rate');
+        
+        if(climbVolEl) climbVolEl.innerText = totalAttempts;
+        if(climbRateEl) {
+            const rate = totalAttempts > 0 ? Math.round((totalSuccess / totalAttempts) * 100) : 0;
+            climbRateEl.innerText = rate + "%";
+        }
+
+        // Appel du nouveau graphique d'évolution
+        if (typeof renderClimbEvolutionChart === "function") {
+            renderClimbEvolutionChart(climbLogs.slice().reverse());
+        }
+    }
+
+    // --- 7. NOUVEAU : HEATMAP DE DISCIPLINE ---
+    if (typeof renderHeatmap === "function") {
+        renderHeatmap(logs);
+    }
+
+    // --- 8. NOUVEAU : RADAR DE L'ÉQUILIBRE ---
+    // On définit ici les objectifs (en minutes par semaine par ex)
+    const objectifsHebdo = {
+        'Escalade': 120, 
+        'Musculation': 60,
+        'Course': 90,
+        'Musique': 130,
+        'Stretching': 60
+    };
+    if (typeof renderRadarChart === "function") {
+        renderRadarChart(logs, objectifsHebdo);
+    }
+
+    // --- 9. NOUVEAU : SCATTER PLOT (EFFORT VS PERF) ---
+    if (typeof renderScatterChart === "function") {
+        renderScatterChart(logs);
+    }
+
+    // --- 10. NOUVEAU : CHARGE DE FATIGUE (7j vs 28j) ---
+    if (typeof renderFatigueChart === "function") {
+        renderFatigueChart(logs);
+    }
+}
+
+// On crée une variable à l'extérieur pour stocker l'instance du graphique
+let radarChartInstance = null;
+function renderRadarChart(logs,objectifs) {
+    const canvas = document.getElementById('radarChart');
+    if (!canvas) return;
+
+
+
+    const labels = Object.keys(objectifs);
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+    const realValues = labels.map(label => {
+        return logs.filter(l => {
+            const logDate = new Date(l.timestamp);
+            return logDate > sevenDaysAgo;
+        }).reduce((sum, l) => {
+            const type = l.type;
+            let mins = 0;
+
+            // MUSCULATION (Déjà en secondes -> Minutes)
+            if (label === 'Musculation') {
+                if (type === "Bras 90°" || type === "Suspension") {
+                    mins = ((parseInt(l.work)||0) + (parseInt(l.rest)||0)) * (parseInt(l.cycles)||1) / 60;
+                } else if (type === "Pyramide Tractions") {
+                    mins = (parseInt(l.totalReps)||0) * (parseFloat(l.avgWorkPerRep)||0) / 60;
+                }
+            }
+            // COURSE (Format 00:00:00 -> H:M:S)
+            else if (label === 'Course' && type === "Course") {
+                if (l.duration && typeof l.duration === 'string' && l.duration.includes(':')) {
+                    const parts = l.duration.split(':').map(Number);
+                    if (parts.length === 3) {
+                        mins = (parts[0] * 60) + parts[1] + (parts[2] / 60);
+                    } else if (parts.length === 2) {
+                        mins = parts[0] + (parts[1] / 60);
+                    }
+                } else {
+                    mins = parseFloat(l.duration) || 0;
+                }
+            }
+            // MUSIQUE (Secondes -> Minutes)
+            else if (label === 'Musique' && type === "Musique") {
+                mins = (parseFloat(l.duration) || 0) / 60;
+            }
+            // ESCALADE (Déjà en minutes)
+            else if (label === 'Escalade' && type === "Escalade") {
+                mins = parseFloat(l.duration) || 0;
+            }
+            // STRETCHING (Déjà en minutes via durationStr)
+            else if (label === 'Stretching' && type === "Étirement") {
+                mins = parseFloat(l.durationStr) || 0;
+            }
+
+            return sum + mins;
+        }, 0);
+    });
+
+    const displayData = realValues.map((val, i) => Math.min(val / objectifs[labels[i]], 1));
+
+    if (window.radarChartInstance) window.radarChartInstance.destroy();
+
+    window.radarChartInstance = new Chart(canvas, {
+        type: 'radar',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: displayData,
+                fill: true,
+                backgroundColor: 'rgba(139, 92, 246, 0.4)',
+                borderColor: '#a855f7',
+                borderWidth: 2,
+                pointRadius: 0
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                r: {
+                    min: 0, max: 1,
+                    ticks: { display: false },
+                    grid: { color: 'rgba(255,255,255,0.1)' },
+                    angleLines: { color: 'rgba(255,255,255,0.1)' },
+                    pointLabels: {
+                        color: '#94a3b8',
+                        font: { size: 12, weight: 'bold' },
+                        callback: (label, index) => `${label}: ${Math.round(realValues[index])}m`
+                    }
+                }
+            },
+            plugins: { legend: { display: false } }
+        }
+    });
+}
+
+function renderFatigueChart(logs) {
+    const ctx = document.getElementById('fatigueChart').getContext('2d');
     
-    if (!logs || logs.length === 0) return;
+    // On génère les 28 derniers jours
+    const last28Days = [...Array(28).keys()].map(i => {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        return d.toISOString().split('T')[0];
+    }).reverse();
 
+    const dailyScores = last28Days.map(date => {
+        return logs
+            .filter(l => l.timestamp.startsWith(date))
+            .reduce((sum, l) => sum + (l.mood || 0), 0); // Utilise mood ou un score d'effort
+    });
 
-    // Si pas de logs, on s'arrête pour éviter les erreurs
-    if (!logs || logs.length === 0) return;
+    // Calcul charge aiguë (moyenne 7j) et chronique (28j)
+    const acuteLoad = dailyScores.map((_, i, arr) => {
+        const slice = arr.slice(Math.max(0, i - 6), i + 1);
+        return slice.reduce((a, b) => a + b, 0) / slice.length;
+    });
 
-    // 1. Mise à jour des totaux (Musique, Zen, etc.)
-    updateGeneralCounters(logs);
-    // Tes anciens graphiques
-    renderMainChart(logs);
-    renderRunChart(logs.filter(l => l.type === 'Course'));
-    renderProgressionChart(logs.filter(l => l.type.includes('Pyramide')));
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: last28Days,
+            datasets: [
+                {
+                    label: 'Charge 7j (Aiguë)',
+                    data: acuteLoad,
+                    borderColor: '#8b5cf6',
+                    tension: 0.4,
+                    fill: true,
+                    backgroundColor: 'rgba(139, 92, 246, 0.1)'
+                }
+            ]
+        },
+        options: {
+            plugins: { legend: { display: false } },
+            scales: { y: { beginAtZero: true } }
+        }
+    });
+}
 
-    // LE NOUVEAU : Volume Hebdo
-    renderVolumeChart(logs);
-    // --- 4. JOURNAL DE BORD ---
-    renderLogs();
+function renderScatterChart(logs) {
+    const canvas = document.getElementById('scatterChart');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    
+    // 1. Dictionnaire pour convertir les textes en positions sur l'axe X
+    const levelMapping = {
+        // Couleurs
+        'blanc': 1, 'jaune': 2, 'vert': 3, 'bleu': 4, 'rouge': 5, 'noir': 6, 'violet': 7,
+        // Cotations (on les intercale ou on les suit)
+        '4c':2.1, '5a':2.4, '5b':2.9, '5c':3.5, '6a':4.8, '6b':5.1, '6c':5.5, '7a':6.4, '7b':6.8,'7c':7,'8a':7.5,'8b':8,'8c':9,
+    };
 
+    const climbLogs = logs.filter(l => l.type === 'Escalade' && l.details);
+    const dataPoints = [];
+
+    climbLogs.forEach(log => {
+        log.details.forEach(lap => {
+            // On récupère le texte, on enlève les espaces et on met en minuscule
+            const rawLevel = String(lap.level || "").toLowerCase().trim();
+            const xVal = levelMapping[rawLevel] || parseFloat(rawLevel);
+            const yVal = parseInt(lap.effort);
+            
+            if (xVal && !isNaN(yVal)) {
+                dataPoints.push({
+                    x: xVal + (Math.random() * 0.3 - 0.15), // Jitter
+                    y: yVal + (Math.random() * 0.3 - 0.15), // Jitter
+                    originalLevel: lap.level,
+                    effortReal: yVal
+                });
+            }
+        });
+    });
+
+    if (window.scatterChartInstance) window.scatterChartInstance.destroy();
+    if (dataPoints.length === 0) return;
+
+    window.scatterChartInstance = new Chart(ctx, {
+        type: 'scatter',
+        data: {
+            datasets: [{
+                data: dataPoints,
+                backgroundColor: 'rgba(168, 85, 247, 0.7)',
+                pointRadius: 6,
+                borderColor: '#fff',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: { 
+                    title: { display: true, text: 'Difficulté (Couleurs & Cotations)', color: '#94a3b8' },
+                    min: 0, max: 8,
+                    ticks: {
+                        stepSize: 1,
+                        color: '#94a3b8',
+                        callback: (v) => ["", "Blanc", "Jaune", "Vert", "Bleu", "Rouge", "Noir", "Violet"][Math.round(v)] || v
+                    },
+                    grid: { color: 'rgba(255,255,255,0.05)' }
+                },
+                y: { 
+                    title: { display: true, text: 'Effort (1-5)', color: '#94a3b8' },
+                    min: 0, max: 6,
+                    ticks: { stepSize: 1, color: '#94a3b8' },
+                    grid: { color: 'rgba(255,255,255,0.05)' }
+                }
+            },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: (ctx) => ` Bloc: ${ctx.raw.originalLevel} - Effort: ${ctx.raw.effortReal}/5`
+                    }
+                }
+            }
+        }
+    });
+}
+
+function renderClimbEvolutionChart(climbLogs) {
+    const canvas = document.getElementById('climbEvolutionChart');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+
+    // Mapping des niveaux en valeurs numériques
+    const levelMap = {
+        'Jaune': 1, '4': 1,
+        'Vert': 2, '5a': 2, '5b': 2, '5c': 2,
+        'Bleu': 3, '6a': 3, '6a+': 3,
+        'Rouge': 4, '6b': 4, '6b+': 4, '6c': 4,
+        'Noir': 5, '6c+': 5, '7a': 5, '7a+': 5, '7b': 5,
+        'Violet': 6, '7b+': 6, '7c': 6, '8a': 6
+    };
+
+    const labels = [];
+    const successData = [];
+    const projectData = [];
+
+    climbLogs.forEach(log => {
+        labels.push(new Date(log.timestamp).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }));
+        
+        if (log.details && log.details.length > 0) {
+            // Trouver le niveau max réussi ce jour-là
+            const validated = log.details
+                .filter(d => d.success)
+                .map(d => levelMap[d.level] || 0);
+            const maxVal = validated.length > 0 ? Math.max(...validated) : 0;
+            
+            // Calculer le "Niveau de Forme" : Difficulté Max tentée + (Ressenti / 10)
+            const attempted = log.details.map(d => {
+                const base = levelMap[d.level] || 0;
+                // Si effort est bas (1), le niveau estimé est plus haut que le bloc
+                // Si effort est haut (5), le niveau estimé est égal au bloc
+                const effortBonus = (6 - parseInt(d.effort)) * 0.2; 
+                return d.success ? base + effortBonus : base - 0.5;
+            });
+            const maxProject = Math.max(...attempted);
+
+            successData.push(maxVal);
+            projectData.push(maxProject);
+        }
+    });
+
+    if (window.myClimbChart) window.myClimbChart.destroy();
+    window.myClimbChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: 'Niveau Validé',
+                    data: successData,
+                    borderColor: '#10b981', // Vert
+                    backgroundColor: 'transparent',
+                    tension: 0.3,
+                    borderWidth: 3,
+                    pointRadius: 4
+                },
+                {
+                    label: 'Potentiel (Forme/Projet)',
+                    data: projectData,
+                    borderColor: '#ec4899', // Rose
+                    borderDash: [5, 5],
+                    backgroundColor: 'transparent',
+                    tension: 0.4,
+                    borderWidth: 2
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    min: 0,
+                    max: 7,
+                    ticks: {
+                        callback: (value) => {
+                            const labels = ['', 'Jaune', 'Vert', 'Bleu', 'Rouge', 'Noir', 'Violet', 'Élite'];
+                            return labels[value];
+                        },
+                        color: '#94a3b8'
+                    },
+                    grid: { color: 'rgba(255,255,255,0.05)' }
+                },
+                x: { grid: { display: false }, ticks: { color: '#94a3b8' } }
+            },
+            plugins: {
+                legend: { labels: { color: '#f8fafc', font: { size: 11 } } }
+            }
+        }
+    });
 }
 
 function updateGeneralCounters(logs) {
@@ -795,7 +1266,6 @@ function renderVolumeChart(logs) {
         const d = new Date();
         d.setDate(d.getDate() - i);
         last7DaysLabels.push(d.toLocaleDateString('fr-FR', { weekday: 'short' }));
-        // On génère la date au format local YYYY-MM-DD
         const ds = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
         last7DaysDates.push(ds);
     }
@@ -806,10 +1276,11 @@ function renderVolumeChart(logs) {
                 const logDate = l.timestamp.split('T')[0];
                 if (logDate !== date) return false;
 
-                // LOGIQUE DE DÉTECTION SANS CHANGER L'ENREGISTREMENT
                 if (category === 'Musculation') {
-                    // On accepte tes noms actuels : "Pyramide Tractions", "Bras 90°", "Suspension"
                     return (l.type === 'Pyramide Tractions' || l.type === 'Bras 90°' || l.type === 'Suspension');
+                }
+                if (category === 'Escalade') {
+                    return l.type === 'Escalade' || l.type === 'escalade';
                 }
                 return l.type === category;
             })
@@ -817,7 +1288,11 @@ function renderVolumeChart(logs) {
                 if (l.type === 'Course') return total + (parseFloat(l.distance) * 10 || 0);
                 if (l.type === 'Musique' || l.type === 'Étirement') return total + (Math.round(parseInt(l.duration) / 60) || 0);
                 
-                // Pour la muscu : on prend totalReps pour la pyramide, ou cycles pour le reste
+                // Volume Escalade = Nombre de tentatives (laps)
+                if (l.type === 'Escalade' || l.type === 'escalade') {
+                    return total + (l.details ? l.details.length : 0);
+                }
+
                 return total + (parseInt(l.totalReps) || parseInt(l.cycles) || 0);
             }, 0);
     };
@@ -828,29 +1303,55 @@ function renderVolumeChart(logs) {
         data: {
             labels: last7DaysLabels,
             datasets: [
-                { label: 'Muscu', data: last7DaysDates.map(d => getScore(d, 'Musculation')), backgroundColor: '#8b5cf6' },
-                { label: 'Run', data: last7DaysDates.map(d => getScore(d, 'Course')), backgroundColor: '#3b82f6' },
-                { label: 'Musique', data: last7DaysDates.map(d => getScore(d, 'Musique')), backgroundColor: '#f59e0b' },
-                { label: 'Zen', data: last7DaysDates.map(d => getScore(d, 'Étirement')), backgroundColor: '#10b981' }
+                { label: 'Muscu', data: last7DaysDates.map(d => getScore(d, 'Musculation')), backgroundColor: '#8b5cf6', borderRadius: 4 },
+                { label: 'Run', data: last7DaysDates.map(d => getScore(d, 'Course')), backgroundColor: '#3b82f6', borderRadius: 4 },
+                { label: 'Grimpe', data: last7DaysDates.map(d => getScore(d, 'Escalade')), backgroundColor: '#ec4899', borderRadius: 4 },
+                { label: 'Musique', data: last7DaysDates.map(d => getScore(d, 'Musique')), backgroundColor: '#f59e0b', borderRadius: 4 },
+                { label: 'Zen', data: last7DaysDates.map(d => getScore(d, 'Étirement')), backgroundColor: '#10b981', borderRadius: 4 }
             ]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            scales: { y: { beginAtZero: true } }
+            scales: { 
+                x: { 
+                    stacked: false, // BARRES CÔTE À CÔTE
+                    grid: { display: false }
+                },
+                y: { 
+                    beginAtZero: true, 
+                    stacked: false, // BARRES CÔTE À CÔTE
+                    grid: { color: 'rgba(255,255,255,0.05)' },
+                    ticks: { color: '#64748b', font: { size: 10 } }
+                } 
+            },
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: { color: '#94a3b8', boxWidth: 8, padding: 15, font: { size: 10, weight: 'bold' } }
+                }
+            },
+            barPercentage: 0.8, // Ajuste la largeur des barres pour éviter qu'elles soient trop fines
+            categoryPercentage: 0.9
         }
     });
 }
 
-function deleteLog(event, id) {
-    event.stopPropagation();
+async function deleteLog(event, id) {
+    event.stopPropagation(); // Empêche d'ouvrir/fermer la carte en cliquant sur supprimer
+
     if (confirm("Supprimer cette séance définitivement ?")) {
-        let logs = DB.getLogs();
-        logs = logs.filter(l => l.id != id);
-        localStorage.setItem('zenith_logs', JSON.stringify(logs));
-        renderLogs();
-        if (document.getElementById('section-stats').classList.contains('hidden') === false) {
-            updateStatsDashboard();
+        try {
+            await DB.deleteLog(id); // On supprime dans IndexedDB
+            await renderLogs();    // On rafraîchit la liste
+            
+            // Si tu as un graphique ou des compteurs d'objectifs, 
+            // n'oublie pas de les rafraîchir ici aussi
+            if (window.updateGoalsDashboard) await updateGoalsDashboard();
+            
+        } catch (err) {
+            console.error("Erreur lors de la suppression :", err);
+            alert("Impossible de supprimer la séance.");
         }
     }
 }
@@ -1427,7 +1928,11 @@ const charts = [
     { id: 'mainChart', title: 'Évolution du Ressenti' },
     { id: 'runChart', title: "Allure Course (min/km)" },
     { id: 'statsChart', title: "Endurance (Repos/Rep)" },
-    { id: 'volumeChart', title: "Volume Hebdomadaire" }
+    { id: 'climbEvolutionChart', title: 'Evolution niveau escalade'},
+    { id: 'volumeChart', title: "Volume Hebdomadaire" },
+    { id: 'fatigueChart', title: "Charge d'Entraînement (Fatigue)" },
+    { id: 'scatterChart', title: "Flow State (Escalade)" },
+    { id: 'radarChart', title: "Équilibre des Piliers" }
 ];
 
 function changeChart(direction) {
@@ -1463,19 +1968,26 @@ const dailyGoals = [
 // --- VOLUME WEEKLY ---
 const weeklyGoals = [
     { label: "Volume Course", target: 20, unit: "km", type: "Course" },
-    { label: "Suspension 2 Doigts", target: 7, unit: "s", type: "Suspension", fingers: "2" }
+    { label: "Suspension 2 Doigts", target: 7, unit: "s", type: "Suspension", fingers: "2" },
+    // Nouveaux objectifs de volume bloc
+    { label: "Blocs Jaunes", target: 5, unit: "top", type: "Escalade", color: "jaune" },
+    { label: "Blocs Verts", target: 5, unit: "top", type: "Escalade", color: "vert" },
+    { label: "Blocs Bleus", target: 5, unit: "top", type: "Escalade", color: "bleu" },
+    { label: "Blocs Rouges", target: 5, unit: "top", type: "Escalade", color: "rouge" }
 ];
 
 // --- PERFORMANCE ELITE ---
 const eliteGoals = [
-    { label: "Semi-Marathon", target: 21.1, unit: "km", type: "Course" }
+    { label: "Semi-Marathon", target: 21.1, unit: "km", type: "Course" },
+    { label: "Bloc Noir (Elite)", target: 1, unit: "top", type: "Escalade", color: "noir" }
 ];
 
 // --- LÉGENDE GOLDEN ---
 const goldenGoals = [
     { label: "Marathon", target: 42.195, unit: "km", type: "Course" },
     { label: "Traction un bras (Pyr 30)", target: 30, unit: "sommet", type: "Pyramide Tractions" },
-    { label: "Suspension 1 Doigt", target: 30, unit: "s", type: "Suspension", fingers: "1" }
+    { label: "Suspension 1 Doigt", target: 30, unit: "s", type: "Suspension", fingers: "1" },
+    { label: "Bloc Violet (Légende)", target: 1, unit: "top", type: "Escalade", color: "violet" }
 ];
 
 const blackGoals = [
@@ -1492,22 +2004,29 @@ const weeklySchedule = [
     { day: "Dimanche", task: "Sortie Longue", icon: "map" }
 ];
 
-
-function updateGoalsDashboard() {
-    const logs = DB.getLogs();
+// Ajoute "async" devant la fonction
+async function updateGoalsDashboard() {
+    // 1. Attendre les logs de la base de données
+    const logs = await DB.getLogs(); 
+    
     const goalsContainer = document.getElementById('goals-container');
     if (!goalsContainer) return;
 
-    // Définition des constantes de temps pour les calculs
+    // Définition des constantes de temps
     const now = new Date();
     const todayStr = now.toISOString().split('T')[0];
     const startWeek = new Date(); 
     startWeek.setDate(now.getDate() - 7);
 
     let totalAchieved = 0;
-    const totalGoalsCount = dailyGoals.length + weeklyGoals.length + eliteGoals.length + goldenGoals.length + blackGoals.length;
+    
+    // Calcul du nombre total (assure-toi que ces listes existent dans ton fichier ou en global)
+    const totalGoalsCount = (typeof dailyGoals !== 'undefined' ? dailyGoals.length : 0) + 
+                            (typeof weeklyGoals !== 'undefined' ? weeklyGoals.length : 0) + 
+                            (typeof eliteGoals !== 'undefined' ? eliteGoals.length : 0) + 
+                            (typeof goldenGoals !== 'undefined' ? goldenGoals.length : 0) + 
+                            (typeof blackGoals !== 'undefined' ? blackGoals.length : 0);
 
-    // Fonction interne pour compter les succès
     const checkSuccess = (current, target) => {
         if (parseFloat(current) >= parseFloat(target)) {
             totalAchieved++;
@@ -1516,15 +2035,84 @@ function updateGoalsDashboard() {
         return false;
     };
 
-    // --- 1. CALCUL & DESSIN DAILY ---
+    // --- 1. DAILY ---
+    let dailyHtml = "";
     const dailyVals = dailyGoals.map(g => {
         const val = logs.filter(l => l.timestamp.split('T')[0] === todayStr && (l.type === g.type || l.exercise === g.type))
-                        .reduce((acc, l) => acc + (Math.round(l.duration/60) || parseInt(l.totalReps) || parseInt(l.work) || 0), 0);
+                        .reduce((acc, l) => {
+                            // Sécurité pour éviter les NaN
+                            const duration = l.duration ? Math.round(l.duration/60) : 0;
+                            const reps = parseInt(l.totalReps) || 0;
+                            const work = parseInt(l.work) || 0;
+                            return acc + duration + reps + work;
+                        }, 0);
         checkSuccess(val, g.target);
         return val;
     });
 
-    let html = `
+    // On prépare le header après avoir calculé les succès daily
+    // Mais attention : pour un score total juste, il faut calculer TOUTES les sections avant de générer le HTML du header.
+    
+    // --- 2. WEEKLY ---
+    let weeklyHtml = `<h3 class="text-[10px] font-bold text-blue-500 uppercase tracking-widest mb-3 mt-6">Volume Weekly</h3>`;
+    weeklyGoals.forEach(g => {
+        const relevant = logs.filter(l => new Date(l.timestamp) >= startWeek && l.type === g.type);
+        let val = 0;
+        
+        if (g.unit === "km") {
+            val = relevant.reduce((acc, l) => acc + (parseFloat(l.distance) || 0), 0);
+        } else if (g.fingers) {
+            val = Math.max(...relevant.filter(l => l.fingers == g.fingers).map(l => parseInt(l.work) || 0), 0);
+        } else if (g.unit === "top" && g.color) {
+            // On compte les succès dans les détails (laps) pour la couleur donnée
+            relevant.forEach(l => {
+                if (l.details && Array.isArray(l.details)) {
+                    val += l.details.filter(lap => lap.color === g.color && lap.success).length;
+                }
+            });
+        }
+        
+        checkSuccess(val, g.target);
+        weeklyHtml += renderGoalBar(g.label, val, g.target, g.unit, 'blue');
+    });
+
+    // --- 3. ELITE ---
+    let eliteHtml = `<h3 class="text-[10px] font-bold text-violet-500 uppercase tracking-widest mb-3 mt-6">Performance Elite</h3>`;
+    eliteGoals.forEach(g => {
+        const val = Math.max(...logs.filter(l => l.type === g.type).map(l => parseFloat(l.distance) || 0), 0);
+        checkSuccess(val, g.target);
+        eliteHtml += renderGoalBar(g.label, val, g.target, g.unit, 'violet');
+    });
+
+    // --- 4. GOLDEN ---
+    let goldenHtml = `<h3 class="text-[10px] font-bold text-amber-500 uppercase tracking-widest mb-3 mt-6">Objectifs Golden</h3>`;
+    goldenGoals.forEach(g => {
+        let best = calculateBest(logs, g);
+        checkSuccess(best, g.target);
+        const progress = Math.min(Math.round((best / g.target) * 100), 100);
+        goldenHtml += renderGoldenCard(g.label, best, g.target, g.unit, progress);
+    });
+
+    // --- 5. BLACK ---
+    let blackHtml = `<h3 class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 mt-6">Catégorie Black</h3>`;
+    blackGoals.forEach(g => {
+        const val = Math.max(...logs.filter(l => l.type === g.type).map(l => parseFloat(l.distance) || 0), 0);
+        checkSuccess(val, g.target);
+        const progress = Math.min(Math.round((val / g.target) * 100), 100);
+        blackHtml += `
+            <div class="glass p-5 rounded-3xl border-2 border-slate-800 bg-black shadow-2xl mb-4">
+                <div class="flex justify-between items-center mb-2">
+                    <span class="text-sm font-black text-white uppercase tracking-tighter">${g.label}</span>
+                    <span class="text-xs font-mono text-slate-500">${progress}%</span>
+                </div>
+                <div class="w-full bg-slate-900 h-3 rounded-full overflow-hidden border border-white/5">
+                    <div class="bg-gradient-to-r from-slate-900 via-slate-400 to-white h-full" style="width: ${progress}%"></div>
+                </div>
+            </div>`;
+    });
+
+    // --- CONSTRUCTION FINALE DU HTML ---
+    let finalHtml = `
         <div class="glass p-4 rounded-3xl mb-6 bg-gradient-to-r from-violet-600/20 to-blue-600/20 border border-white/10 flex items-center justify-between">
             <div>
                 <p class="text-[10px] text-slate-400 uppercase font-black tracking-widest">Objectifs Atteints</p>
@@ -1534,97 +2122,22 @@ function updateGoalsDashboard() {
                 <span class="text-[10px] font-bold text-violet-400">${Math.round((totalAchieved/totalGoalsCount)*100 || 0)}%</span>
             </div>
         </div>
+        <h3 class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Discipline Daily</h3>
     `;
 
-    html += `<h3 class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Discipline Daily</h3>`;
+    // Ajout des barres Daily
     dailyGoals.forEach((g, i) => {
-        html += renderGoalBar(g.label, dailyVals[i], g.target, g.unit, 'emerald');
+        finalHtml += renderGoalBar(g.label, dailyVals[i], g.target, g.unit, 'emerald');
     });
 
-    // --- 2. CALCUL & DESSIN WEEKLY ---
-    html += `<h3 class="text-[10px] font-bold text-blue-500 uppercase tracking-widest mb-3 mt-6">Volume Weekly</h3>`;
-    weeklyGoals.forEach(g => {
-        const relevant = logs.filter(l => new Date(l.timestamp) >= startWeek && l.type === g.type);
-        let val = 0;
-        if (g.unit === "km") val = relevant.reduce((acc, l) => acc + (parseFloat(l.distance) || 0), 0);
-        else if (g.fingers) val = Math.max(...relevant.filter(l => l.fingers == g.fingers).map(l => parseInt(l.work) || 0), 0);
-        
-        checkSuccess(val, g.target);
-        html += renderGoalBar(g.label, val.toFixed(1), g.target, g.unit, 'blue');
-    });
+    // Ajout des autres sections
+    finalHtml += weeklyHtml + eliteHtml + goldenHtml + blackHtml;
 
-    // --- 3. CALCUL & DESSIN ELITE ---
-    html += `<h3 class="text-[10px] font-bold text-violet-500 uppercase tracking-widest mb-3 mt-6">Performance Elite</h3>`;
-    eliteGoals.forEach(g => {
-        const val = Math.max(...logs.filter(l => l.type === g.type).map(l => parseFloat(l.distance) || 0), 0);
-        checkSuccess(val, g.target);
-        html += renderGoalBar(g.label, val, g.target, g.unit, 'violet');
-    });
+    // Ajout des Records
+    finalHtml += `<h3 class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3 mt-10">Records Historiques</h3>`;
+    finalHtml += renderPersonalRecords(logs);
 
-    // --- 4. CALCUL & DESSIN GOLDEN ---
-    html += `<h3 class="text-[10px] font-bold text-amber-500 uppercase tracking-widest mb-3 mt-6">Objectifs Golden</h3>`;
-    goldenGoals.forEach(g => {
-        let best = 0;
-        const relevant = logs.filter(l => l.type === g.type);
-        relevant.forEach(l => {
-            let v = 0;
-            if (g.unit === "km") v = parseFloat(l.distance) || 0;
-            else if (g.fingers) v = (l.fingers == g.fingers) ? (parseInt(l.work) || 0) : 0;
-            else if (g.unit === "sommet") v = parseInt(l.note?.match(/Sommet (\d+)/)?.[1]) || 0;
-            if (v > best) best = v;
-        });
-        checkSuccess(best, g.target);
-        const progress = Math.min(Math.round((best / g.target) * 100), 100);
-        html += renderGoldenCard(g.label, best, g.target, g.unit, progress);
-    });
-
-    // --- 5. CALCUL & DESSIN BLACK ---
-    html += `<h3 class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 mt-6">Catégorie Black (Impossible)</h3>`;
-    blackGoals.forEach(g => {
-        const val = Math.max(...logs.filter(l => l.type === g.type).map(l => parseFloat(l.distance) || 0), 0);
-        checkSuccess(val, g.target);
-        const progress = Math.min(Math.round((val / g.target) * 100), 100);
-        html += `
-            <div class="glass p-5 rounded-3xl border-2 border-slate-800 bg-black shadow-2xl mb-4">
-                <div class="flex justify-between items-center mb-2">
-                    <span class="text-sm font-black text-white uppercase tracking-tighter">${g.label}</span>
-                    <span class="text-xs font-mono text-slate-500">${progress}%</span>
-                </div>
-                <div class="w-full bg-slate-900 h-3 rounded-full overflow-hidden border border-white/5">
-                    <div class="bg-gradient-to-r from-slate-900 via-slate-400 to-white h-full shadow-[0_0_15px_rgba(255,255,255,0.2)]" style="width: ${progress}%"></div>
-                </div>
-            </div>`;
-    });
-
-    // --- 6. RÉCAPITULATIF DES RECORDS ---
-    html += `<h3 class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3 mt-10">Records Historiques</h3>`;
-    
-    const bestRun = logs.filter(l => l.type === 'Course').sort((a,b) => b.distance - a.distance)[0];
-    const bestPace = logs.filter(l => l.type === 'Course' && l.pace).sort((a,b) => parseFloat(a.pace) - parseFloat(b.pace))[0];
-    const bestPyr = logs.filter(l => l.type === 'Pyramide Tractions')
-                        .sort((a,b) => (parseInt(b.note?.match(/Sommet (\d+)/)?.[1]) || 0) - (parseInt(a.note?.match(/Sommet (\d+)/)?.[1]) || 0))[0];
-    const bestHang = logs.filter(l => l.type === 'Suspension').sort((a,b) => b.work - a.work)[0];
-
-    const records = [
-        { label: "Distance Max", val: bestRun ? bestRun.distance + " km" : "---", date: bestRun?.timestamp },
-        { label: "Allure Record", val: bestPace ? bestPace.pace + " /km" : "---", date: bestPace?.timestamp },
-        { label: "Sommet Record", val: bestPyr ? "Sommet " + (bestPyr.note.match(/Sommet (\d+)/)[1]) : "---", date: bestPyr?.timestamp },
-        { label: "Suspension Max", val: bestHang ? bestHang.work + " s" : "---", date: bestHang?.timestamp }
-    ];
-
-    html += `
-        <div class="grid grid-cols-2 gap-3 mb-10">
-            ${records.map(r => `
-                <div class="p-3 bg-slate-900/40 rounded-2xl border border-white/5">
-                    <p class="text-[9px] text-slate-500 uppercase font-bold mb-1">${r.label}</p>
-                    <p class="text-sm font-bold text-white">${r.val}</p>
-                    <p class="text-[8px] text-slate-600 font-mono mt-1">${r.date ? new Date(r.date).toLocaleDateString('fr-FR') : ''}</p>
-                </div>
-            `).join('')}
-        </div>
-    `;
-
-    goalsContainer.innerHTML = html;
+    goalsContainer.innerHTML = finalHtml;
     lucide.createIcons();
 }
 
@@ -1633,19 +2146,37 @@ function updateGoalsDashboard() {
 function renderPersonalRecords(logs) {
     // 1. Meilleure Distance (Course)
     const bestRun = logs.filter(l => l.type === 'Course').sort((a,b) => b.distance - a.distance)[0];
-    // 2. Meilleure Allure (Course) - On cherche la valeur min
-    const bestPace = logs.filter(l => l.type === 'Course' && l.pace).sort((a,b) => parseFloat(a.pace) - parseFloat(b.pace))[0];
-    // 3. Meilleur Sommet (Pyramide)
+    
+    // 2. Meilleur Sommet (Pyramide)
     const bestPyr = logs.filter(l => l.type === 'Pyramide Tractions')
                         .sort((a,b) => (parseInt(b.note.match(/Sommet (\d+)/)?.[1]) || 0) - (parseInt(a.note.match(/Sommet (\d+)/)?.[1]) || 0))[0];
-    // 4. Meilleure Suspension (Travail pur)
+
+    // 3. Meilleure Cotation (Escalade)
+    const colorOrder = ['blanc', 'jaune', 'vert', 'bleu', 'rouge', 'noir', 'violet'];
+    let absoluteBestColor = "---";
+    let bestColorLog = null;
+
+    logs.filter(l => l.type === 'Escalade').forEach(l => {
+        l.details?.forEach(lap => {
+            if (lap.success) {
+                const currentIndex = colorOrder.indexOf(lap.color);
+                const bestIndex = colorOrder.indexOf(absoluteBestColor);
+                if (currentIndex > bestIndex) {
+                    absoluteBestColor = lap.color;
+                    bestColorLog = l;
+                }
+            }
+        });
+    });
+
+    // 4. Meilleure Suspension
     const bestHang = logs.filter(l => l.type === 'Suspension').sort((a,b) => b.work - a.work)[0];
 
     const records = [
         { label: "Plus longue distance", val: bestRun ? bestRun.distance + " km" : "---", date: bestRun?.timestamp },
-        { label: "Allure Record", val: bestPace ? bestPace.pace + " min/km" : "---", date: bestPace?.timestamp },
-        { label: "Plus haut sommet", val: bestPyr ? "Sommet " + bestPyr.note.match(/Sommet (\d+)/)[1] : "---", date: bestPyr?.timestamp },
-        { label: "Plus longue suspension", val: bestHang ? bestHang.work + " s" : "---", date: bestHang?.timestamp }
+        { label: "Plus haut sommet", val: bestPyr ? "Sommet " + (bestPyr.note.match(/Sommet (\d+)/)?.[1] || "?") : "---", date: bestPyr?.timestamp },
+        { label: "Cotation Max", val: absoluteBestColor.toUpperCase(), date: bestColorLog?.timestamp },
+        { label: "Max Suspension", val: bestHang ? bestHang.work + " s" : "---", date: bestHang?.timestamp }
     ];
 
     return `
@@ -1670,6 +2201,11 @@ function calculateBest(logs, goal) {
         if (goal.unit === "km") val = parseFloat(l.distance) || 0;
         else if (goal.fingers) val = (l.fingers == goal.fingers) ? (parseInt(l.work) || 0) : 0;
         else if (goal.unit === "sommet") val = parseInt(l.note?.match(/Sommet (\d+)/)?.[1]) || 0;
+        else if (goal.unit === "top" && goal.color) {
+            // Si on a réussi au moins un bloc de cette couleur dans cette séance
+            const hasSuccess = l.details?.some(lap => lap.color === goal.color && lap.success);
+            val = hasSuccess ? 1 : 0;
+        }
         if (val > best) best = val;
     });
     return best;
@@ -1773,4 +2309,177 @@ function renderSchedule() {
 
     container.innerHTML = scheduleHTML;
     lucide.createIcons();
+}
+
+
+
+
+// ------------------ ESCALADE -------------------
+// --- CONFIGURATION ESCALADE ---
+const CONFIG_CLIMB = {
+    'Bloc': {
+        levels: ['Jaune', 'Vert', 'Bleu', 'Rouge', 'Noir', 'Violet'],
+        colors: { 'Jaune': '#fbbf24', 'Vert': '#4ade80', 'Bleu': '#60a5fa', 'Rouge': '#f87171', 'Noir': '#1e293b', 'Violet': '#a855f7' }
+    },
+    'Voie': {
+        levels: ['4c', '5a', '5b', '5c', '6a', '6b', '6c', '7a', '7b','7c','8a','8b','8c'],
+        colors: {} // On utilisera une couleur par défaut pour les voies
+    }
+};
+
+let currentClimbSession = {
+    startTime: null,
+    type: '',
+    laps: [],
+    selectedLevel: '',
+    selectedColor: ''
+};
+
+let isSuccess = true; // État global du bouton OUI/NON
+
+// --- LOGIQUE DE SÉANCE ---
+
+function startClimb(type) {
+    currentClimbSession = {
+        type: type, // 'Bloc' ou 'Voie'
+        startTime: new Date(),
+        laps: [],
+        selectedLevel: type === 'Bloc' ? 'Jaune' : '5a'
+    };
+
+    document.getElementById('climb-setup').classList.add('hidden');
+    document.getElementById('climb-active').classList.remove('hidden');
+    document.getElementById('climb-type-display').innerText = type;
+    document.getElementById('climb-laps').innerHTML = ''; // Vide la liste précédente
+
+    renderDifficultyButtons(type);
+}
+
+function renderDifficultyButtons(type) {
+    const container = document.getElementById('climb-levels-grid');
+    const config = CONFIG_CLIMB[type];
+    
+    container.innerHTML = config.levels.map((lvl) => {
+        if (type === 'Bloc') {
+            const color = config.colors[lvl];
+            return `
+                <button onclick="selectClimbLevel('${lvl}', '${color}')" 
+                        class="lvl-btn w-8 h-8 rounded-full flex-shrink-0 border-2 border-transparent transition-all"
+                        style="background-color: ${color}"
+                        data-lvl="${lvl}">
+                </button>`;
+        } else {
+            return `
+                <button onclick="selectClimbLevel('${lvl}', '#6366f1')" 
+                        class="lvl-btn px-4 py-2 rounded-xl bg-slate-800 text-white text-[10px] font-bold flex-shrink-0 border border-white/5 transition-all"
+                        data-lvl="${lvl}">
+                    ${lvl}
+                </button>`;
+        }
+    }).join('');
+    
+    selectClimbLevel(currentClimbSession.selectedLevel, type === 'Bloc' ? config.colors[currentClimbSession.selectedLevel] : '#6366f1');
+}
+
+function selectClimbLevel(lvl, color) {
+    currentClimbSession.selectedLevel = lvl;
+    currentClimbSession.selectedColor = color;
+
+    document.querySelectorAll('.lvl-btn').forEach(btn => {
+        if (btn.getAttribute('data-lvl') === lvl) {
+            btn.classList.add('border-white', 'scale-110');
+            btn.classList.remove('border-transparent', 'bg-slate-800');
+            if(currentClimbSession.type === 'Voie') btn.classList.add('bg-violet-600');
+        } else {
+            btn.classList.remove('border-white', 'scale-110', 'bg-violet-600');
+            btn.classList.add('border-transparent');
+            if(currentClimbSession.type === 'Voie') btn.classList.add('bg-slate-800');
+        }
+    });
+}
+
+function setClimbStatus(status) {
+    isSuccess = status;
+    const btnSuccess = document.getElementById('btn-success');
+    const btnFail = document.getElementById('btn-fail');
+    
+    if(status) {
+        btnSuccess.className = 'px-4 py-1 rounded-lg bg-emerald-500/20 text-emerald-500 border border-emerald-500/50 text-xs font-bold';
+        btnFail.className = 'px-4 py-1 rounded-lg bg-slate-800 text-slate-500 text-xs';
+    } else {
+        btnSuccess.className = 'px-4 py-1 rounded-lg bg-slate-800 text-slate-500 text-xs';
+        btnFail.className = 'px-4 py-1 rounded-lg bg-red-500/20 text-red-500 border border-red-500/50 text-xs font-bold';
+    }
+}
+
+function addClimbLap() {
+    const level = currentClimbSession.selectedLevel;
+    const effort = document.getElementById('climb-effort').value;
+    const status = isSuccess;
+    const color = currentClimbSession.selectedColor;
+
+    const lap = {
+        level: level,
+        effort: effort,
+        success: status,
+        time: new Date().toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'})
+    };
+    
+    currentClimbSession.laps.push(lap);
+    
+    // Affichage dans la liste de la session active
+    const lapHTML = `
+        <div class="flex justify-between items-center p-4 glass rounded-2xl border-l-4 mb-2 animate-in fade-in slide-in-from-right-4 duration-300" 
+                style="border-left-color: ${status ? color : '#ef4444'}">
+            <div class="flex items-center gap-3">
+                <span class="text-xl">${status ? '✅' : '❌'}</span>
+                <div>
+                    <span class="block text-white font-bold text-sm">${currentClimbSession.type} ${level}</span>
+                    <span class="text-[10px] text-slate-500">${lap.time}</span>
+                </div>
+            </div>
+            <div class="flex flex-col items-end gap-1">
+                <div class="flex gap-1">
+                    ${Array.from({length: 5}).map((_, i) => `
+                        <div class="w-1.5 h-1.5 rounded-full ${i < effort ? 'bg-violet-500' : 'bg-slate-700'}"></div>
+                    `).join('')}
+                </div>
+                <span class="text-[9px] text-slate-500 uppercase">Effort ${effort}/5</span>
+            </div>
+        </div>
+    `;
+    
+    document.getElementById('climb-laps').insertAdjacentHTML('afterbegin', lapHTML);
+}
+
+async function finishClimbSession() {
+    const durationInput = document.getElementById('climb-duration-input');
+    const duration = parseInt(durationInput.value) || 0;
+
+    if (currentClimbSession.laps.length === 0) {
+        alert("Ajoute au moins une ascension !");
+        return;
+    }
+
+    const successes = currentClimbSession.laps.filter(l => l.success).length;
+
+    pendingData = {
+        type: "Escalade",
+        exercise: currentClimbSession.type,
+        duration: duration,
+        details: currentClimbSession.laps,
+        timestamp: new Date().toISOString(),
+        note: `${successes} réussi(s) sur ${currentClimbSession.laps.length} tentatives.`
+    };
+
+    resetClimbUI();
+    showMoodSelector(pendingData);
+}
+
+function resetClimbUI() {
+    document.getElementById('climb-setup').classList.remove('hidden');
+    document.getElementById('climb-active').classList.add('hidden');
+    document.getElementById('climb-laps').innerHTML = '';
+    document.getElementById('climb-duration-input').value = '';
+    currentClimbSession.laps = [];
 }
