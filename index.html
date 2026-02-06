@@ -18,6 +18,7 @@
             <i data-lucide="calendar" onclick="showSection('objectifs')" class="w-6 h-6 text-slate-400 cursor-pointer hover:text-violet-400 transition-colors"></i>
             <i data-lucide="settings" class="w-6 h-6 text-slate-400"></i>
         </div>
+        <!--
         <div class="mt-6 p-4 glass rounded-3xl border border-amber-500/30 bg-amber-500/5">
             <h3 class="text-amber-400 font-bold text-sm mb-2 flex items-center gap-2">
                 <i data-lucide="database" class="w-4 h-4"></i>
@@ -27,7 +28,7 @@
             <button onclick="migrateFromLocalStorage()" class="w-full py-3 bg-amber-500 hover:bg-amber-600 text-white rounded-2xl font-bold text-sm transition-all shadow-lg shadow-amber-500/20">
                 Transférer mes données (Migration)
             </button>
-        </div>
+        </div>-->
     </header>
 
     <main id="app-content" class="p-4 max-w-md mx-auto">
@@ -398,7 +399,10 @@
         </section>
     </main>
 
-    <nav class="fixed bottom-0 left-0 right-0 glass border-t border-white/5 px-4 py-4 flex overflow-x-auto no-scrollbar gap-8 items-center z-50 justify-start md:justify-center">
+    <nav class="fixed bottom-0 left-0 right-0 glass border-t border-white/5 px-6 py-4 
+                flex flex-nowrap overflow-x-auto no-scrollbar gap-8 items-center z-50 
+                justify-start md:justify-center">
+        
         <button onclick="showSection('muscu')" class="flex-shrink-0 flex flex-col items-center gap-1 text-violet-500">
             <i data-lucide="armchair" class="w-6 h-6"></i>
             <span class="text-[10px] font-bold">Muscu</span>
@@ -408,19 +412,23 @@
             <i data-lucide="mountain" class="w-6 h-6"></i>
             <span class="text-[10px]">Grimpe</span>
         </button>
-        <button onclick="showSection('musique')" class="flex flex-col items-center gap-1 text-slate-400">
+
+        <button onclick="showSection('musique')" class="flex-shrink-0 flex flex-col items-center gap-1 text-slate-400">
             <i data-lucide="music" class="w-6 h-6"></i>
             <span class="text-[10px]">Musique</span>
         </button>
-        <button onclick="showSection('run')" class="flex flex-col items-center gap-1 text-slate-400">
+
+        <button onclick="showSection('run')" class="flex-shrink-0 flex flex-col items-center gap-1 text-slate-400">
             <i data-lucide="timer" class="w-6 h-6"></i>
             <span class="text-[10px]">Run</span>
         </button>
-        <button onclick="showSection('stretching')" class="flex flex-col items-center gap-1 text-slate-400">
+
+        <button onclick="showSection('stretching')" class="flex-shrink-0 flex flex-col items-center gap-1 text-slate-400">
             <i data-lucide="accessibility" class="w-6 h-6"></i>
             <span class="text-[10px]">Zen</span>
         </button>
-        <button onclick="showSection('stats')" class="flex flex-col items-center gap-1 text-slate-400">
+
+        <button onclick="showSection('stats')" class="flex-shrink-0 flex flex-col items-center gap-1 text-slate-400">
             <i data-lucide="bar-chart-3" class="w-6 h-6"></i>
             <span class="text-[10px]">Stats</span>
         </button>
