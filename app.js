@@ -58,9 +58,28 @@ function loadExercise(type) {
         const isArms90 = type === 'arms90';
         container.innerHTML = `
             <div class="glass p-6 rounded-3xl border border-violet-500/20 text-center">
-                <h3 class="font-bold text-xl mb-4 text-violet-400">${isArms90 ? 'Bras 90°' : 'Suspension'}</h3>
+                <h3 class="font-bold text-xl mb-4 text-violet-400">${isArms90 ? 'Bras Bloqués' : 'Suspension'}</h3>
                 <div class="grid grid-cols-2 gap-3 mb-6 text-left">
-                    ${!isArms90 ? `
+                    ${isArms90 ? `
+                        <div class="col-span-1">
+                            <label class="text-[10px] text-slate-500 uppercase ml-1">Angle</label>
+                            <select id="hang-angle" class="w-full bg-slate-800 p-2 rounded-xl text-xs mt-1 outline-none">
+                                <option value="0">0°</option>
+                                <option value="45">45°</option>
+                                <option value="90">90°</option>
+                                <option value="120">120°</option>
+                                
+                            </select>
+                        </div>
+                        <div class="col-span-1">
+                            <label class="text-[10px] text-slate-500 uppercase ml-1">Côté</label>
+                            <select id="hang-side" class="w-full bg-slate-800 p-2 rounded-xl text-xs mt-1 outline-none">
+                                <option value="2 bras">2 bras</option>
+                                <option value="Bras Droit">Droit</option>
+                                <option value="Bras Gauche">Gauche</option>
+                            </select>
+                        </div>
+                    ` : `
                         <div class="col-span-1">
                             <label class="text-[10px] text-slate-500 uppercase ml-1">Doigts</label>
                             <select id="hang-fingers" class="w-full bg-slate-800 p-2 rounded-xl text-xs mt-1 outline-none">
@@ -73,8 +92,8 @@ function loadExercise(type) {
                                 <option value="2">2 Mains</option><option value="1">1 Main</option>
                             </select>
                         </div>
-                    ` : ''}
-                    <div class="${isArms90 ? 'col-span-2' : 'col-span-1'}">
+                    `}
+                    <div class="col-span-1">
                         <label class="text-[10px] text-slate-500 uppercase ml-1">Travail (s)</label>
                         <input type="number" id="input-work" value="30" class="w-full bg-slate-800 p-2 rounded-xl text-xs mt-1 outline-none">
                     </div>
@@ -147,9 +166,13 @@ function startComplexCycle(type) {
                     const sessionData = {
                         type: isArms90 ? 'Bras 90°' : 'Suspension',
                         work, rest, cycles,
+                        // On génère la note demandée : "Cycles x Travail s (Repos: Repos s)"
+                        note: `${cycles} x ${work}s (Repos: ${rest}s)`,
+                        angle: isArms90 ? document.getElementById('hang-angle').value : null,
+                        side: isArms90 ? document.getElementById('hang-side').value : null,
                         fingers: !isArms90 ? document.getElementById('hang-fingers').value : null,
                         hands: !isArms90 ? document.getElementById('hang-hands').value : null,
-                        note: `${cycles} x ${work}s (Repos: ${rest}s)`
+        
                     };
                     showMoodSelector(sessionData);
                     return;
@@ -377,31 +400,45 @@ function finalSave(jsonStr, moodScore) {
 // --- MOTEUR 1 : MUSCU & SUSPENSION (Ton code qui fonctionne) ---
 function renderMuscuDetails(log) {
     return `
-        ${log.hands ? `
+        ${log.angle || log.side ? `
             <div class="flex gap-2 mb-3">
-                <span class="bg-violet-500/20 text-violet-300 px-2 py-0.5 rounded text-[9px] uppercase font-bold border border-violet-500/30">
-                    ${log.hands} Main(s)
-                </span>
-                ${log.fingers ? `
-                    <span class="bg-blue-500/20 text-blue-300 px-2 py-0.5 rounded text-[9px] uppercase font-bold border border-blue-500/30">
-                        ${log.fingers} Doigt(s)
-                    </span>
-                ` : ''}
+                ${log.side ? `<span class="bg-violet-500/20 text-violet-300 px-2 py-0.5 rounded text-[9px] uppercase font-bold border border-violet-500/30">${log.side}</span>` : ''}
+                ${log.angle ? `<span class="bg-blue-500/20 text-blue-300 px-2 py-0.5 rounded text-[9px] uppercase font-bold border border-blue-500/30">Angle: ${log.angle}°</span>` : ''}
             </div>
-        ` : ''}
+        ` : (log.hands ? `
+            <div class="flex gap-2 mb-3">
+                <span class="bg-violet-500/20 text-violet-300 px-2 py-0.5 rounded text-[9px] uppercase font-bold border border-violet-500/30">${log.hands} Main(s)</span>
+                ${log.fingers ? `<span class="bg-blue-500/20 text-blue-300 px-2 py-0.5 rounded text-[9px] uppercase font-bold border border-blue-500/30">${log.fingers} Doigt(s)</span>` : ''}
+            </div>
+        ` : '')}
 
         ${log.totalReps ? `
             <div class="grid grid-cols-2 gap-2 mb-3">
                 <div class="bg-violet-500/10 p-2 rounded-xl border border-violet-500/20 text-center">
-                    <p class="text-[9px] text-slate-500 uppercase">Vitesse</p>
-                    <p class="text-sm font-bold text-violet-400">${log.avgWorkPerRep}s / rep</p>
+                    <p class="text-[9px] text-slate-500 uppercase">Vitesse moy.</p>
+                    <p class="text-xs font-bold text-violet-400">${log.avgWorkPerRep}s / rep</p>
                 </div>
                 <div class="bg-blue-500/10 p-2 rounded-xl border border-blue-500/20 text-center">
                     <p class="text-[9px] text-slate-500 uppercase">Repos moy.</p>
-                    <p class="text-sm font-bold text-blue-400">${log.avgRestPerRep}s / rep</p>
+                    <p class="text-xs font-bold text-blue-400">${log.avgRestPerRep}s / rep</p>
                 </div>
             </div>
-        ` : ''}
+        ` : `
+            <div class="grid grid-cols-3 gap-2 mb-3">
+                <div class="bg-slate-800/40 p-2 rounded-xl border border-slate-700 text-center">
+                    <p class="text-[9px] text-slate-500 uppercase">Cycles</p>
+                    <p class="text-xs font-bold text-white">${log.cycles || '-'}</p>
+                </div>
+                <div class="bg-violet-500/10 p-2 rounded-xl border border-violet-500/20 text-center">
+                    <p class="text-[9px] text-slate-500 uppercase">Maintien</p>
+                    <p class="text-xs font-bold text-violet-400">${log.work || '-'}s</p>
+                </div>
+                <div class="bg-blue-500/10 p-2 rounded-xl border border-blue-500/20 text-center">
+                    <p class="text-[9px] text-slate-500 uppercase">Repos</p>
+                    <p class="text-xs font-bold text-blue-400">${log.rest || '-'}s</p>
+                </div>
+            </div>
+        `}
     `;
 }
 
@@ -534,12 +571,16 @@ async function renderLogs(filter = 'all') {
     const container = document.getElementById('log-list');
     if (!container) return;
 
+    // 1. Dictionnaire de traduction (ajoutez-le ici ou en haut du fichier)
+    const EXERCISE_DISPLAY_NAMES = {
+        "Bras 90°": "Bras Blocage"
+        // Vous pourrez en ajouter d'autres ici plus tard
+    };
+
     const searchTerm = document.getElementById('log-search')?.value.toLowerCase() || "";
     
-    // Récupération des logs depuis Dexie
     let logs = await DB.getLogs(); 
 
-    // Filtre par type et recherche textuelle
     const filteredLogs = logs.filter(l => {
         const matchesType = (filter === 'all' || l.type.toLowerCase() === filter.toLowerCase());
         const text = (l.type + (l.note || "") + (l.exercise || "")).toLowerCase();
@@ -551,7 +592,10 @@ async function renderLogs(filter = 'all') {
     container.innerHTML = filteredLogs.map(log => {
         let specificContent = "";
         
-        // Routage du rendu selon le sport
+        // 2. Traduction du type ou de l'exercice pour l'affichage
+        // On vérifie si le nom actuel existe dans notre dictionnaire
+        const displayType = EXERCISE_DISPLAY_NAMES[log.type] || log.type;
+
         switch(log.type) {
             case 'Course': specificContent = renderRunDetails(log); break;
             case 'Musique': specificContent = renderMusicDetails(log); break;
@@ -561,7 +605,6 @@ async function renderLogs(filter = 'all') {
         }
 
         const displayDate = log.date || new Date(log.timestamp).toLocaleDateString('fr-FR');
-        // Sécurité pour l'ID (Dexie utilise .id)
         const logId = log.id; 
 
         return `
@@ -570,7 +613,7 @@ async function renderLogs(filter = 'all') {
                 onclick="toggleComment('${logId}')">
                 
                 <div class="flex justify-between items-start mb-2">
-                    <p class="text-sm font-bold text-white">${log.type}</p>
+                    <p class="text-sm font-bold text-white">${displayType}</p>
                     <span class="text-[10px] text-slate-500">${displayDate}</span>
                 </div>
 
@@ -692,49 +735,54 @@ async function updateStatsDashboard() {
         }
     }
 
-    // --- 2. STATS SUSPENSION (Corrigé) ---
+    // --- 2. STATS SUSPENSION & BRAS 90 (Modifié pour comparaison) ---
     const filterEl = document.getElementById('stat-finger-filter');
     const fingerFilter = filterEl ? filterEl.value : 'all';
 
-    // On sépare les logs
     const hangLogs = logs.filter(l => {
         const typeLower = (l.type || "").toLowerCase();
-        // Uniquement suspensions (doigts)
         const isFingerHang = typeLower.includes('suspension') || typeLower.includes('deadhang');
         if (!isFingerHang) return false;
-        if (fingerFilter === 'all') return true;
-        return String(l.fingers) === String(fingerFilter);
+        return fingerFilter === 'all' || String(l.fingers) === String(fingerFilter);
     });
 
-    const arms90Logs = logs.filter(l => (l.type || "").toLowerCase().includes('bras 90'));
+    const arms90Logs = logs.filter(l => (l.type || "").toLowerCase().includes('bras'));
 
     // Calcul volume Doigts
-    const totalSecondsHang = hangLogs.reduce((acc, l) => {
-        let vol = (l.totalReps != null) ? parseInt(l.totalReps) : (parseInt(l.cycles) * parseInt(l.work));
-        return acc + (isNaN(vol) ? 0 : vol);
-    }, 0);
+    const totalSecondsHang = hangLogs.reduce((acc, l) => acc + (parseInt(l.cycles) * parseInt(l.work) || 0), 0);
 
-    // Calcul volume Bras 90
+    // Calcul volume Bras 90 détaillé
+    const armStats = { droit: 0, gauche: 0, deux: 0 };
     const totalSeconds90 = arms90Logs.reduce((acc, l) => {
-        let vol = (l.totalReps != null) ? parseInt(l.totalReps) : (parseInt(l.cycles) * parseInt(l.work));
-        return acc + (isNaN(vol) ? 0 : vol);
+        let vol = parseInt(l.cycles) * parseInt(l.work) || 0;
+        
+        const side = (l.side || "").toLowerCase();
+        if (side.includes('droit')) armStats.droit += vol;
+        else if (side.includes('gauche')) armStats.gauche += vol;
+        else armStats.deux += vol;
+
+        return acc + vol;
     }, 0);
 
-    // Affichage Doigts
-    const displayHang = document.getElementById('stat-total-hang');
-    if (displayHang) {
-        const hMins = Math.floor(totalSecondsHang / 60);
-        const hSecs = totalSecondsHang % 60;
-        displayHang.innerText = hMins > 0 ? `${hMins}m ${hSecs.toString().padStart(2, '0')}s` : `${hSecs}s`;
+    // Affichage des compteurs
+    if (document.getElementById('stat-total-hang')) {
+        document.getElementById('stat-total-hang').innerText = totalSecondsHang + "s";
+    }
+    if (document.getElementById('stat-total-arms90')) {
+        document.getElementById('stat-total-arms90').innerText = totalSeconds90 + "s";
     }
 
-    // Affichage Bras 90 (si tu as un élément HTML pour ça, sinon tu peux l'ajouter)
-    const display90 = document.getElementById('stat-total-arms90');
-    if (display90) {
-        const aMins = Math.floor(totalSeconds90 / 60);
-        const aSecs = totalSeconds90 % 60;
-        display90.innerText = aMins > 0 ? `${aMins}m ${aSecs.toString().padStart(2, '0')}s` : `${aSecs}s`;
+    // Calcul du ratio de force pour l'affichage textuel
+    const ratioInfo = document.getElementById('arm-ratio-info');
+    if (ratioInfo && (armStats.droit > 0 || armStats.gauche > 0)) {
+        const diff = Math.abs(armStats.droit - armStats.gauche);
+        const more = armStats.droit > armStats.gauche ? "Droit" : "Gauche";
+        ratioInfo.innerText = diff > 0 ? `Dominance : ${more} (+${diff}s)` : "Équilibre parfait";
     }
+
+    // Appel du nouveau graphique
+    renderArmBalanceChart(armStats);
+    
     // --- 3. STATS COURSE ---
     const runLogs = logs.filter(l => l.type === 'Course');
     if (runLogs.length > 0) {
@@ -822,6 +870,44 @@ async function updateStatsDashboard() {
     if (typeof renderCompetenceRadar === "function") {
         renderCompetenceRadar(logs);
     }
+}
+
+function renderArmBalanceChart(data) {
+    const ctx = document.getElementById('armBalanceChart');
+    if (!ctx) return;
+
+    if (window.myArmChart) window.myArmChart.destroy();
+
+    window.myArmChart = new Chart(ctx.getContext('2d'), {
+        type: 'bar',
+        data: {
+            labels: ['DROIT', 'GAUCHE', '2 BRAS'],
+            datasets: [{
+                data: [data.droit, data.gauche, data.deux],
+                backgroundColor: [
+                    'rgba(139, 92, 246, 0.4)', // Violet
+                    'rgba(59, 130, 246, 0.4)',  // Bleu
+                    'rgba(255, 255, 255, 0.1)'  // Blanc/Gris
+                ],
+                borderColor: ['#8b5cf6', '#3b82f6', 'rgba(255,255,255,0.2)'],
+                borderWidth: 1,
+                borderRadius: 4
+            }]
+        },
+        options: {
+            indexAxis: 'y', // Barres horizontales pour un gain de place vertical
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                x: { display: false, grid: { display: false } },
+                y: {
+                    ticks: { color: '#64748b', font: { size: 9, weight: 'bold' } },
+                    grid: { display: false }
+                }
+            }
+        }
+    });
 }
 
 function renderCompetenceRadar(logs) {

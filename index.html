@@ -57,8 +57,8 @@
 
                 <button onclick="loadExercise('arms90')" class="glass w-full p-6 rounded-3xl flex justify-between items-center group">
                     <div class="text-left">
-                        <h3 class="font-bold text-lg group-hover:text-violet-400 transition-colors">Bras 90°</h3>
-                        <p class="text-xs text-slate-400">Suspension verrouillée</p>
+                        <h3 class="font-bold text-lg group-hover:text-violet-400 transition-colors">Blocage Bras</h3>
+                        <p class="text-xs text-slate-400">Angle & Côté personnalisables</p>
                     </div>
                     <i data-lucide="chevron-right"></i>
                 </button>
@@ -236,7 +236,7 @@
                         </select>
                     </div>
 
-                    <div class="grid grid-cols-2 gap-6 relative">
+                    <div class="grid grid-cols-2 gap-6 relative mb-6">
                         <div class="relative">
                             <p class="text-[9px] text-slate-500 uppercase mb-1">Doigts (Deadhang)</p>
                             <p id="stat-total-hang" class="text-2xl font-black text-blue-400 tracking-tight">0s</p>
@@ -246,13 +246,21 @@
                         <div class="absolute left-1/2 top-1 bottom-1 w-px bg-white/5"></div>
 
                         <div class="pl-4">
-                            <p class="text-[9px] text-slate-500 uppercase mb-1">Bras 90° (Blocage)</p>
+                            <p class="text-[9px] text-slate-500 uppercase mb-1">Bras (Blocage)</p>
                             <p id="stat-total-arms90" class="text-2xl font-black text-indigo-400 tracking-tight">0s</p>
                             <p class="text-[8px] text-slate-600 uppercase mt-1">Maintien total</p>
                         </div>
                     </div>
-                </div>
 
+                    <div class="mt-4 pt-4 border-t border-white/5">
+                        <p class="text-[9px] text-slate-500 uppercase font-bold mb-3 text-center">Équilibre de Force (Droit vs Gauche)</p>
+                        <div class="h-32 w-full">
+                            <canvas id="armBalanceChart"></canvas>
+                        </div>
+                        <div id="arm-ratio-info" class="text-[8px] text-center text-slate-500 mt-2 uppercase tracking-widest"></div>
+                    </div>
+                </div>
+                
 
             <div class="grid grid-cols-2 gap-4 mb-8">
                 <div class="glass p-4 rounded-2xl border-l-4 border-violet-500">
