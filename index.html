@@ -212,30 +212,47 @@
             </div>
         </section>
 
-        <section id="section-stats" class="hidden">
-            <h2 class="text-xl font-bold mb-6 text-white flex items-center gap-2">
-                <i data-lucide="trending-up" class="text-violet-500"></i> Analyse Performance
-            </h2>
-            <div class="glass p-4 rounded-2xl mb-6">
-                <div class="flex justify-between items-center mb-4">
-                    <p class="text-[10px] text-slate-500 uppercase font-bold">Temps de Suspension</p>
-                    <select id="stat-finger-filter" onchange="updateStatsDashboard()" class="bg-slate-800 text-[10px] rounded px-2 py-1 outline-none border border-white/10">
-                        <option value="all">Global</option>
-                        <option value="10">10 Doigts</option>
-                        <option value="9">9 Doigts</option>
-                        <option value="8">8 Doigts</option>
-                        <option value="7">7 Doigts</option>
-                        <option value="6">6 Doigts</option>
-                        <option value="5">5 Doigts</option>
-                        <option value="4">4 Doigts</option>
-                        <option value="3">3 Doigts</option>
-                        <option value="2">2 Doigts</option>
-                        <option value="1">1 Doigt</option>
-                    </select>
+
+            <section id="section-stats" class="hidden">
+                <h2 class="text-xl font-bold mb-6 text-white flex items-center gap-2">
+                    <i data-lucide="trending-up" class="text-violet-500"></i> Analyse Performance
+                </h2>
+
+                <div class="glass p-5 rounded-3xl mb-6 border border-white/5">
+                    <div class="flex justify-between items-center mb-6">
+                        <p class="text-[10px] text-slate-500 uppercase font-bold tracking-widest">Force Statique</p>
+                        <select id="stat-finger-filter" onchange="updateStatsDashboard()" class="bg-slate-800 text-[10px] rounded-lg px-2 py-1 outline-none border border-white/10 text-slate-400">
+                            <option value="all">Global</option>
+                            <option value="10">10 Doigts</option>
+                            <option value="9">9 Doigts</option>
+                            <option value="8">8 Doigts</option>
+                            <option value="7">7 Doigts</option>
+                            <option value="6">6 Doigts</option>
+                            <option value="5">5 Doigts</option>
+                            <option value="4">4 Doigts</option>
+                            <option value="3">3 Doigts</option>
+                            <option value="2">2 Doigts</option>
+                            <option value="1">1 Doigt</option>
+                        </select>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-6 relative">
+                        <div class="relative">
+                            <p class="text-[9px] text-slate-500 uppercase mb-1">Doigts (Deadhang)</p>
+                            <p id="stat-total-hang" class="text-2xl font-black text-blue-400 tracking-tight">0s</p>
+                            <p class="text-[8px] text-slate-600 uppercase mt-1">Sous tension</p>
+                        </div>
+
+                        <div class="absolute left-1/2 top-1 bottom-1 w-px bg-white/5"></div>
+
+                        <div class="pl-4">
+                            <p class="text-[9px] text-slate-500 uppercase mb-1">Bras 90° (Blocage)</p>
+                            <p id="stat-total-arms90" class="text-2xl font-black text-indigo-400 tracking-tight">0s</p>
+                            <p class="text-[8px] text-slate-600 uppercase mt-1">Maintien total</p>
+                        </div>
+                    </div>
                 </div>
-                <p id="stat-total-hang" class="text-3xl font-bold text-blue-400">0s</p>
-                <p class="text-[9px] text-slate-500 mt-1 uppercase tracking-tighter" id="stat-hang-detail">Temps total sous tension</p>
-            </div>
+
 
             <div class="grid grid-cols-2 gap-4 mb-8">
                 <div class="glass p-4 rounded-2xl border-l-4 border-violet-500">

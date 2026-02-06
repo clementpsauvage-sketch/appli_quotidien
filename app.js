@@ -692,36 +692,49 @@ async function updateStatsDashboard() {
         }
     }
 
-    // --- 2. STATS SUSPENSION ---
+    // --- 2. STATS SUSPENSION (Corrigé) ---
     const filterEl = document.getElementById('stat-finger-filter');
     const fingerFilter = filterEl ? filterEl.value : 'all';
 
+    // On sépare les logs
     const hangLogs = logs.filter(l => {
         const typeLower = (l.type || "").toLowerCase();
-        const isHang = typeLower.includes('suspension') || typeLower.includes('deadhang') || typeLower.includes('bras 90');
-        if (!isHang) return false;
+        // Uniquement suspensions (doigts)
+        const isFingerHang = typeLower.includes('suspension') || typeLower.includes('deadhang');
+        if (!isFingerHang) return false;
         if (fingerFilter === 'all') return true;
         return String(l.fingers) === String(fingerFilter);
     });
 
-    const totalSeconds = hangLogs.reduce((acc, l) => {
-        let volume = 0;
-        if (l.totalReps != null) {
-            volume = parseInt(l.totalReps);
-        } else if (l.cycles && l.work) {
-            volume = parseInt(l.cycles) * parseInt(l.work);
-        }
-        return acc + (isNaN(volume) ? 0 : volume);
+    const arms90Logs = logs.filter(l => (l.type || "").toLowerCase().includes('bras 90'));
+
+    // Calcul volume Doigts
+    const totalSecondsHang = hangLogs.reduce((acc, l) => {
+        let vol = (l.totalReps != null) ? parseInt(l.totalReps) : (parseInt(l.cycles) * parseInt(l.work));
+        return acc + (isNaN(vol) ? 0 : vol);
     }, 0);
 
-    const mins = Math.floor(totalSeconds / 60);
-    const secs = totalSeconds % 60;
+    // Calcul volume Bras 90
+    const totalSeconds90 = arms90Logs.reduce((acc, l) => {
+        let vol = (l.totalReps != null) ? parseInt(l.totalReps) : (parseInt(l.cycles) * parseInt(l.work));
+        return acc + (isNaN(vol) ? 0 : vol);
+    }, 0);
 
+    // Affichage Doigts
     const displayHang = document.getElementById('stat-total-hang');
     if (displayHang) {
-        displayHang.innerText = mins > 0 ? `${mins}m ${secs.toString().padStart(2, '0')}s` : `${secs}s`;
+        const hMins = Math.floor(totalSecondsHang / 60);
+        const hSecs = totalSecondsHang % 60;
+        displayHang.innerText = hMins > 0 ? `${hMins}m ${hSecs.toString().padStart(2, '0')}s` : `${hSecs}s`;
     }
 
+    // Affichage Bras 90 (si tu as un élément HTML pour ça, sinon tu peux l'ajouter)
+    const display90 = document.getElementById('stat-total-arms90');
+    if (display90) {
+        const aMins = Math.floor(totalSeconds90 / 60);
+        const aSecs = totalSeconds90 % 60;
+        display90.innerText = aMins > 0 ? `${aMins}m ${aSecs.toString().padStart(2, '0')}s` : `${aSecs}s`;
+    }
     // --- 3. STATS COURSE ---
     const runLogs = logs.filter(l => l.type === 'Course');
     if (runLogs.length > 0) {
