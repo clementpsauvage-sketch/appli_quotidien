@@ -1612,21 +1612,69 @@ let runInterval;
 let runSeconds = 0;
 let isRunning = false;
 
+let runStartTime = null; // Stocke le moment précis du début
+let runSecondsBeforePause = 0; // Stocke le cumul des sessions précédentes (si pause)
+
 function toggleRunTimer() {
     const btn = document.getElementById('btn-run');
+    
     if (!isRunning) {
+        // --- DÉMARRAGE / REPRISE ---
         isRunning = true;
         btn.innerText = "Pause";
         btn.classList.replace('bg-blue-600', 'bg-orange-500');
+
+        // On définit le point de départ : "Maintenant" moins le temps déjà écoulé
+        runStartTime = Date.now();
+
         runInterval = setInterval(() => {
-            runSeconds++;
+            // Calcul du temps écoulé total
+            const now = Date.now();
+            const totalElapsedMs = (now - runStartTime) + (runSecondsBeforePause * 1000);
+            runSeconds = Math.floor(totalElapsedMs / 1000);
+            
             updateRunDisplay();
+
+            // Notification toutes les minutes (pour ne pas saturer le système)
+            if (runSeconds % 60 === 0 && runSeconds > 0) {
+                sendTimerNotification(runSeconds, "Course en cours");
+            }
         }, 1000);
+
+        // Demander la permission pour les notifications au premier clic
+        if (Notification.permission === 'default') {
+            Notification.requestPermission();
+        }
+        
     } else {
+        // --- PAUSE ---
         isRunning = false;
         btn.innerText = "Reprendre";
         btn.classList.replace('bg-orange-500', 'bg-blue-600');
+        
+        // On sauvegarde le temps accumulé avant de couper l'intervalle
+        runSecondsBeforePause = runSeconds;
         clearInterval(runInterval);
+        
+        sendTimerNotification(runSeconds, "Course en pause");
+    }
+}
+
+async function sendTimerNotification(seconds, status) {
+    if ('serviceWorker' in navigator && Notification.permission === 'granted') {
+        const registration = await navigator.serviceWorker.ready;
+        
+        // Formatage HH:MM:SS pour la notification
+        const timeStr = new Date(seconds * 1000).toISOString().substr(11, 8);
+        
+        registration.showNotification("Zenith Coach", {
+            body: `${status} : ${timeStr}`,
+            icon: 'icon-192.png',
+            badge: 'icon-192.png', // Petite icône dans la barre d'état
+            tag: 'run-timer', // Important : remplace la notif précédente au lieu d'en créer une nouvelle
+            silent: true,
+            renotify: false
+        });
     }
 }
 
@@ -1708,41 +1756,49 @@ function finalSave2(mood) {
 
 
 
-let musicInterval;
-let musicSeconds = 0;
+let musicStartTime = null; // Stockera l'heure exacte du début
+let musicInterval = null;
 let currentInstrument = "";
 
 function startMusicSession(instrument) {
     currentInstrument = instrument;
-    musicSeconds = 0;
     
     // UI Switch
     document.getElementById('music-setup').classList.add('hidden');
     document.getElementById('music-active').classList.remove('hidden');
     document.getElementById('active-instrument-name').innerText = instrument;
 
+    // On enregistre l'heure précise du clic
+    musicStartTime = Date.now();
+
     musicInterval = setInterval(() => {
-        musicSeconds++;
-        const mins = Math.floor(musicSeconds / 60).toString().padStart(2, '0');
-        const secs = (musicSeconds % 60).toString().padStart(2, '0');
+        // Calcul de la différence entre "maintenant" et le "début"
+        const now = Date.now();
+        const totalMs = now - musicStartTime;
+        const totalSeconds = Math.floor(totalMs / 1000);
+        
+        // Mise à jour de l'affichage
+        const mins = Math.floor(totalSeconds / 60).toString().padStart(2, '0');
+        const secs = (totalSeconds % 60).toString().padStart(2, '0');
         document.getElementById('music-timer').innerText = `${mins}:${secs}`;
+
+        // Envoi d'une notification toutes les 2 minutes pour le suivi
+        if (totalSeconds % 120 === 0 && totalSeconds > 0) {
+            sendMusicNotification(totalSeconds, instrument);
+        }
     }, 1000);
 }
 
 function stopMusicSession() {
-    // 1. Arrêt du chrono
     clearInterval(musicInterval);
     
-    // 2. Préparation des données de temps
-    const finalSeconds = musicSeconds;
+    // Calcul final ultra-précis
+    const finalSeconds = Math.floor((Date.now() - musicStartTime) / 1000);
     const durationMins = Math.floor(finalSeconds / 60);
     const durationStr = durationMins > 0 ? `${durationMins} min` : `${finalSeconds} sec`;
     
-    // 3. Récupération du nom de l'instrument (via variable ou DOM)
-    const instrumentName = typeof currentInstrument !== 'undefined' ? currentInstrument : 
-                        (document.getElementById('active-instrument-name')?.innerText || 'Musique');
+    const instrumentName = currentInstrument || 'Musique';
 
-    // 4. Objet de données fusionné
     const musicData = {
         type: 'Musique',
         exercise: instrumentName, // 'exercise' pour la compatibilité journal
@@ -1753,18 +1809,39 @@ function stopMusicSession() {
         note: `Session de ${instrumentName} (${durationStr})`
     };
 
-    // 5. Reset de l'Interface Utilisateur
+    // Reset UI
     document.getElementById('music-setup').classList.remove('hidden');
     document.getElementById('music-active').classList.add('hidden');
+    document.getElementById('music-timer').innerText = "00:00";
     
-    const timerDisplay = document.getElementById('music-timer');
-    if (timerDisplay) timerDisplay.innerText = "00:00:00";
-    
-    // Remise à zéro du compteur global
-    musicSeconds = 0;
+    // Nettoyage de la notification
+    clearMusicNotification();
 
-    // 6. Envoi au sélecteur de ressenti (Mood Selector)
     showMoodSelector(musicData);
+}
+
+
+async function sendMusicNotification(seconds, instrument) {
+    if ('serviceWorker' in navigator && Notification.permission === 'granted') {
+        const registration = await navigator.serviceWorker.ready;
+        const timeStr = new Date(seconds * 1000).toISOString().substr(14, 5); // Format MM:SS
+        
+        registration.showNotification("Zenith Musique", {
+            body: `Session de ${instrument} : ${timeStr}`,
+            icon: 'icon-192.png',
+            tag: 'music-timer', // Remplace la notif précédente
+            silent: true, // Pas de vibration à chaque minute
+            renotify: false
+        });
+    }
+}
+
+async function clearMusicNotification() {
+    if ('serviceWorker' in navigator) {
+        const registration = await navigator.serviceWorker.ready;
+        const notifications = await registration.getNotifications({ tag: 'music-timer' });
+        notifications.forEach(n => n.close());
+    }
 }
 
 let audioCtx = null;
@@ -2216,7 +2293,7 @@ const charts = [
     { id: 'fatigueChart', title: "Charge d'Entraînement (Fatigue)" },
     { id: 'scatterChart', title: "Flow State (Escalade)" },
     { id: 'radarChart', title: "Équilibre des Piliers" },
-    { id: 'radarChart2', title: "Profil escalade" }
+    { id: 'radarChart2', title: "Profil" }
 ];
 
 function changeChart(direction) {
