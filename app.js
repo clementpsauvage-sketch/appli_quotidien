@@ -814,16 +814,16 @@ async function updateStatsDashboard() {
     if (typeof renderMainChart === "function") renderMainChart(logs);
     if (typeof renderVolumeChart === "function") renderVolumeChart(logs);
 
-        // --- 6. STATS ESCALADE ---
+    // --- 6. STATS ESCALADE (MODIFIÉ : BLOC & VOIE SÉPARÉS) ---
     const climbLogs = logs.filter(l => l.type === 'Escalade' || l.type === 'escalade');
+
     if (climbLogs.length > 0) {
-        // Calcul du volume total
+        // 6a. Calculs des compteurs globaux (Volumes et Success Rate)
         const totalAttempts = climbLogs.reduce((acc, l) => acc + (l.details ? l.details.length : 0), 0);
         const totalSuccess = climbLogs.reduce((acc, l) => {
             return acc + (l.details ? l.details.filter(d => d.success).length : 0);
         }, 0);
 
-        // Affichage des compteurs (assure-toi que ces IDs existent dans ton HTML)
         const climbVolEl = document.getElementById('stat-climb-volume');
         const climbRateEl = document.getElementById('stat-climb-success-rate');
         
@@ -833,9 +833,16 @@ async function updateStatsDashboard() {
             climbRateEl.innerText = rate + "%";
         }
 
-        // Appel du nouveau graphique d'évolution
-        if (typeof renderClimbEvolutionChart === "function") {
-            renderClimbEvolutionChart(climbLogs.slice().reverse());
+        // 6b. APPELS DES DEUX NOUVELLES FONCTIONS D'ÉVOLUTION
+        // On passe les logs triés du plus ancien au plus récent pour la ligne de temps
+        const sortedClimbLogs = climbLogs.slice().reverse();
+
+        if (typeof renderBlocEvolutionChart === "function") {
+            renderBlocEvolutionChart(sortedClimbLogs);
+        }
+        
+        if (typeof renderVoieEvolutionChart === "function") {
+            renderVoieEvolutionChart(sortedClimbLogs);
         }
     }
 
@@ -1248,12 +1255,29 @@ function renderScatterChart(logs) {
     });
 }
 
-function renderClimbEvolutionChart(climbLogs) {
-    const canvas = document.getElementById('climbEvolutionChart');
+const voieLevelMap = {
+    '4c': 1, '5a': 2, '5b': 3, '5c': 4,
+    '6a': 5, '6a+': 6, '6b': 7, '6b+': 8, '6c': 9, '6c+': 10,
+    '7a': 11, '7a+': 12, '7b': 13, '7b+': 14, '7c': 15, '7c+': 16,
+    '8a': 17, '8a+': 18, '8b': 19, '8b+': 20, '8c': 21, '8c+': 22,
+    '9a': 23, '9a+': 24, '9b': 25, '9b+': 26, '9c': 27
+};
+
+// Liste inverse pour l'affichage des labels sur l'axe Y
+const voieLabels = [
+    '', '4c', '5a', '5b', '5c', '6a', '6a+', '6b', '6b+', '6c', '6c+',
+    '7a', '7a+', '7b', '7b+', '7c', '7c+', '8a', '8a+', '8b', '8b+', '8c', '8c+',
+    '9a', '9a+', '9b', '9b+', '9c'
+];
+
+function renderBlocEvolutionChart(climbLogs) {
+    const canvas = document.getElementById('blocEvolutionChart');
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
 
-    // Mapping des niveaux en valeurs numériques
+    // FILTRE : On ne garde que les logs où l'exercice est "Bloc"
+    const blocLogs = climbLogs.filter(log => log.exercise === 'Bloc');
+
     const levelMap = {
         'Jaune': 1, '4': 1,
         'Vert': 2, '5a': 2, '5b': 2, '5c': 2,
@@ -1267,80 +1291,25 @@ function renderClimbEvolutionChart(climbLogs) {
     const successData = [];
     const projectData = [];
 
-    climbLogs.forEach(log => {
+    blocLogs.forEach(log => {
+        if (!log.details || log.details.length === 0) return;
+
         labels.push(new Date(log.timestamp).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }));
         
-        if (log.details && log.details.length > 0) {
-            // Trouver le niveau max réussi ce jour-là
-            const validated = log.details
-                .filter(d => d.success)
-                .map(d => levelMap[d.level] || 0);
-            const maxVal = validated.length > 0 ? Math.max(...validated) : 0;
-            
-            // Calculer le "Niveau de Forme" : Difficulté Max tentée + (Ressenti / 10)
-            const attempted = log.details.map(d => {
-                const base = levelMap[d.level] || 0;
-                // Si effort est bas (1), le niveau estimé est plus haut que le bloc
-                // Si effort est haut (5), le niveau estimé est égal au bloc
-                const effortBonus = (6 - parseInt(d.effort)) * 0.2; 
-                return d.success ? base + effortBonus : base - 0.5;
-            });
-            const maxProject = Math.max(...attempted);
+        const validated = log.details.filter(d => d.success).map(d => levelMap[d.level] || 0);
+        const maxVal = validated.length > 0 ? Math.max(...validated) : 0;
+        
+        const attempted = log.details.map(d => {
+            const base = levelMap[d.level] || 0;
+            const effortBonus = (6 - parseInt(d.effort)) * 0.2; 
+            return d.success ? base + effortBonus : base - 0.5;
+        });
 
-            successData.push(maxVal);
-            projectData.push(maxProject);
-        }
+        successData.push(maxVal);
+        projectData.push(Math.max(...attempted));
     });
 
-    if (window.myClimbChart) window.myClimbChart.destroy();
-    window.myClimbChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: labels,
-            datasets: [
-                {
-                    label: 'Niveau Validé',
-                    data: successData,
-                    borderColor: '#10b981', // Vert
-                    backgroundColor: 'transparent',
-                    tension: 0.3,
-                    borderWidth: 3,
-                    pointRadius: 4
-                },
-                {
-                    label: 'Potentiel (Forme/Projet)',
-                    data: projectData,
-                    borderColor: '#ec4899', // Rose
-                    borderDash: [5, 5],
-                    backgroundColor: 'transparent',
-                    tension: 0.4,
-                    borderWidth: 2
-                }
-            ]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-                y: {
-                    min: 0,
-                    max: 7,
-                    ticks: {
-                        callback: (value) => {
-                            const labels = ['', 'Jaune', 'Vert', 'Bleu', 'Rouge', 'Noir', 'Violet', 'Élite'];
-                            return labels[value];
-                        },
-                        color: '#94a3b8'
-                    },
-                    grid: { color: 'rgba(255,255,255,0.05)' }
-                },
-                x: { grid: { display: false }, ticks: { color: '#94a3b8' } }
-            },
-            plugins: {
-                legend: { labels: { color: '#f8fafc', font: { size: 11 } } }
-            }
-        }
-    });
+    createClimbChart(ctx, 'Bloc', labels, successData, projectData, 'window.myBlocChart', 7);
 }
 
 function updateGeneralCounters(logs) {
@@ -1357,6 +1326,119 @@ function updateGeneralCounters(logs) {
     const zElem = document.getElementById('stat-total-zen');
     if (mElem) mElem.innerText = (musicTotal / 3600).toFixed(1) + "h";
     if (zElem) zElem.innerText = Math.round(zenTotal / 60) + "m";
+}
+
+function renderVoieEvolutionChart(climbLogs) {
+    const canvas = document.getElementById('voieEvolutionChart');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const voieLogs = climbLogs.filter(log => log.exercise === 'Voie');
+
+    // On utilise notre nouvelle map exhaustive
+    const levelMap = voieLevelMap; 
+
+    const labels = [];
+    const successData = [];
+    const projectData = [];
+
+    voieLogs.forEach(log => {
+        if (!log.details || log.details.length === 0) return;
+        labels.push(new Date(log.timestamp).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }));
+        
+        const validated = log.details.filter(d => d.success).map(d => levelMap[d.level] || 0);
+        const maxVal = validated.length > 0 ? Math.max(...validated) : 0;
+        
+        const attempted = log.details.map(d => {
+            const base = levelMap[d.level] || 0;
+            const effortBonus = (6 - parseInt(d.effort)) * 0.2; 
+            return d.success ? base + effortBonus : base - 0.5;
+        });
+
+        successData.push(maxVal);
+        projectData.push(Math.max(...attempted));
+    });
+
+    // yMax = 27 pour atteindre le 9c dans la liste voieLabels
+    createClimbChart(ctx, 'Voie', labels, successData, projectData, 'window.myVoieChart', 27);
+}
+
+function createClimbChart(ctx, type, labels, successData, projectData, chartRef, yMax) {
+    const globalRef = chartRef === 'window.myBlocChart' ? window.myBlocChart : window.myVoieChart;
+    if (globalRef) globalRef.destroy();
+
+    const mainColor = type === 'Bloc' ? '#10b981' : '#3b82f6';
+    const projectColor = '#ec4899';
+
+    const newChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: `Niveau ${type} Validé`,
+                    data: successData,
+                    borderColor: mainColor,
+                    backgroundColor: 'transparent',
+                    tension: 0.3,
+                    borderWidth: 3,
+                    // --- POINTS EN CERCLES VIDES ---
+                    pointRadius: 5,
+                    pointHoverRadius: 7,
+                    pointBackgroundColor: 'transparent', // Vide au milieu
+                    pointBorderColor: mainColor,
+                    pointBorderWidth: 2
+                },
+                {
+                    label: 'Potentiel (Forme)',
+                    data: projectData,
+                    borderColor: projectColor,
+                    borderDash: [5, 5],
+                    tension: 0.4,
+                    borderWidth: 2,
+                    // --- POINTS EN CERCLES VIDES (PROJETS) ---
+                    pointRadius: 4,
+                    pointHoverRadius: 6,
+                    pointBackgroundColor: 'transparent', // Vide au milieu
+                    pointBorderColor: projectColor,
+                    pointBorderWidth: 2
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    min: 0,
+                    max: yMax,
+                    ticks: {
+                        stepSize: 1,
+                        color: '#94a3b8',
+                        font: { size: 9 },
+                        callback: function(value) {
+                            if (type === 'Bloc') {
+                                const bLabels = ['', 'Jaune', 'Vert', 'Bleu', 'Rouge', 'Noir', 'Violet', 'Élite'];
+                                return bLabels[value] || '';
+                            }
+                            // Assure-toi que voieLabels est bien défini dans ton scope global
+                            return (typeof voieLabels !== 'undefined') ? voieLabels[value] || '' : value;
+                        }
+                    },
+                    grid: { color: 'rgba(255,255,255,0.05)' }
+                },
+                x: { ticks: { color: '#94a3b8' }, grid: { display: false } }
+            },
+            plugins: {
+                legend: { 
+                    // On ne touche pas au style de la légende ici
+                    labels: { color: '#f8fafc', font: { size: 10 } } 
+                }
+            }
+        }
+    });
+
+    if (chartRef === 'window.myBlocChart') window.myBlocChart = newChart;
+    else window.myVoieChart = newChart;
 }
 
 
@@ -1521,9 +1603,9 @@ function renderVolumeChart(logs) {
                             case 'Jaune':  case '4c':           return acc + 1;   // Échauffement
                             case 'Vert':   case '5a': case '5b': return acc + 2;   
                             case 'Bleu':   case '5c': case '6a': return acc + 4;   // Un peu de challenge
-                            case 'Rouge':  case '6b': case '6c': return acc + 7;   // Effort intense
-                            case 'Noir':   case '7a': case '7b': return acc + 12;  // Très intense
-                            case 'Violet': case '7c': case '8a': return acc + 20;  // Performance
+                            case 'Rouge':  case '6b': case '6c': return acc + 8;   // Effort intense
+                            case 'Noir':   case '7a': case '7b': return acc + 16;  // Très intense
+                            case 'Violet': case '7c': case '8a': return acc + 32;  // Performance
                             default: return acc + 3; 
                         }
                     }, 0);
@@ -2306,7 +2388,8 @@ const charts = [
     { id: 'mainChart', title: 'Évolution du Ressenti' },
     { id: 'runChart', title: "Allure Course (min/km)" },
     { id: 'statsChart', title: "Endurance (Repos/Rep)" },
-    { id: 'climbEvolutionChart', title: 'Evolution niveau escalade'},
+    { id: 'blocEvolutionChart', title: 'Evolution niveau escalade (bloc)'},
+    { id: 'voieEvolutionChart', title: 'Evolution niveau escalade (voie)'},
     { id: 'volumeChart', title: "Volume Hebdomadaire" },
     { id: 'fatigueChart', title: "Charge d'Entraînement (Fatigue)" },
     { id: 'scatterChart', title: "Flow State (Escalade)" },
