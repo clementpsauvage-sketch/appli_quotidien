@@ -1,4 +1,4 @@
-const CACHE_NAME = 'zenith-v13';
+const CACHE_NAME = 'zenith-v14';
 const ASSETS = [
     './',
     './index.html',
