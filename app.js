@@ -1509,8 +1509,26 @@ function renderVolumeChart(logs) {
                 if (l.type === 'Musique' || l.type === 'Étirement') return total + (Math.round(parseInt(l.duration) / 60) || 0);
                 
                 // Volume Escalade = Nombre de tentatives (laps)
+                // Dans ton reduce de getScore pour l'escalade :
                 if (l.type === 'Escalade' || l.type === 'escalade') {
-                    return total + (l.details ? l.details.length : 0);
+                    if (!l.details) return total;
+
+                    const pointsSeance = l.details.reduce((acc, bloc) => {
+                        const niveau = bloc.level; 
+                        
+                        switch (niveau) {
+                            // --- SYSTÈME ARKOSE / COTATIONS ---
+                            case 'Jaune':  case '4c':           return acc + 1;   // Échauffement
+                            case 'Vert':   case '5a': case '5b': return acc + 2;   
+                            case 'Bleu':   case '5c': case '6a': return acc + 4;   // Un peu de challenge
+                            case 'Rouge':  case '6b': case '6c': return acc + 7;   // Effort intense
+                            case 'Noir':   case '7a': case '7b': return acc + 12;  // Très intense
+                            case 'Violet': case '7c': case '8a': return acc + 20;  // Performance
+                            default: return acc + 3; 
+                        }
+                    }, 0);
+
+                    return total + pointsSeance;
                 }
 
                 return total + (parseInt(l.totalReps) || parseInt(l.cycles) || 0);
