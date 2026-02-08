@@ -37,6 +37,11 @@ body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #f8fa
     to { opacity: 1; transform: translateY(0); }
 }
 
+#timer-progress {
+    transition: stroke-dashoffset 1s linear;
+    transform: rotate(-90deg);
+    transform-origin: center;
+}
 /* Style des boutons du menu */
 .stretch-card {
     background: rgba(255, 255, 255, 0.03);
@@ -59,12 +64,5 @@ body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #f8fa
     display: none;
 }
 
-/* Permet de cacher la barre de défilement tout en gardant le mouvement */
-.no-scrollbar::-webkit-scrollbar {
-    display: none;
-}
-.no-scrollbar {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
-}
+
 

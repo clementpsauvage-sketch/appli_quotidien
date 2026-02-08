@@ -6,6 +6,40 @@ document.addEventListener('DOMContentLoaded', async () => {
     // On attend que les données soient chargées avant de dessiner
     await renderLogs(); 
     await updateGoalsDashboard();
+    // VERIFICATION CHRONO MUSIQUE EN COURS
+    const savedMusicStart = localStorage.getItem('active_music_start');
+    if (savedMusicStart) {
+        const instrument = localStorage.getItem('active_music_instrument');
+        
+        // On remet l'UI en mode "actif"
+        showSection('musique'); // Optionnel : force l'affichage de la section
+        document.getElementById('music-setup').classList.add('hidden');
+        document.getElementById('music-active').classList.remove('hidden');
+        document.getElementById('active-instrument-name').innerText = instrument;
+        
+        // On relance la boucle de rafraîchissement
+        launchMusicInterval();
+    }
+    // RÉCUPÉRATION COURSE
+    const savedIsRunning = localStorage.getItem('run_isRunning') === 'true';
+    runSecondsBeforePause = parseInt(localStorage.getItem('run_secondsBeforePause')) || 0;
+    runStartTime = parseInt(localStorage.getItem('run_startTime'));
+
+    if (savedIsRunning && runStartTime) {
+        isRunning = true;
+        const btn = document.getElementById('btn-run');
+        if(btn) {
+            btn.innerText = "Pause";
+            btn.classList.replace('bg-blue-600', 'bg-orange-500');
+        }
+        launchRunInterval();
+    } else if (runSecondsBeforePause > 0) {
+        // Cas où l'appli a fermé alors qu'on était en PAUSE
+        runSeconds = runSecondsBeforePause;
+        updateRunDisplay();
+        const btn = document.getElementById('btn-run');
+        if(btn) btn.innerText = "Reprendre";
+    }
 });
 
 if ('serviceWorker' in navigator) {
@@ -493,12 +527,76 @@ function renderMusicDetails(log) {
 
 // --- MOTEUR 4 : STRETCHING ---
 function renderStretchDetails(log) {
+    // Debug : affiche les données reçues dans la console pour vérifier les calculs
+    console.log("Données du log :", { 
+        reel: log.duration, 
+        theo: log.durationTheo, 
+        fini: log.completed 
+    });
+
+    let statusLabel = "";
+    let statusColor = "";
+    let icon = "check-circle";
+    let tempsCalcule = 0; 
+    // Conversion forcée en nombres pour éviter les erreurs de comparaison JS
+    const duration = Number(log.duration);
+    const durationTheo = Number(log.durationTheo);
+    const tempsSeconde = log.duration;
+    const tempsMinuteArrondi = Number(log.durationStr2)
+
+    tempsCalcule = tempsSeconde - 60*tempsMinuteArrondi
+    if (tempsCalcule <= 0) {
+        tempsFinaleSec = 1 + tempsCalcule
+        tempsFinaleMin = tempsMinuteArrondi -1
+    } else {
+        tempsFinaleSec = tempsCalcule
+        tempsFinaleMin = tempsMinuteArrondi
+    }
+
+    // 1. Priorité à l'abandon explicite (Bouton Abandonner)
+    if (log.completed === false) {
+        statusLabel = "Séance Abandonnée";
+        statusColor = "text-red-400";
+        icon = "alert-circle";
+    } 
+    // 2. Si le temps réel est inférieur à 90% du temps prévu (Exos passés via "Passer")
+    // On ajoute une vérification pour s'assurer que durationTheo existe
+    else if (durationTheo > 0 && duration < (durationTheo * 0.9)) {
+        statusLabel = "Séance Raccourcie";
+        statusColor = "text-orange-400";
+        icon = "fast-forward";
+    } 
+    // 3. Sinon, la séance est considérée comme complète
+    else {
+        statusLabel = "Séance Complète";
+        statusColor = "text-emerald-400";
+        icon = "check-circle";
+    }
+
     return `
-        <div class="bg-emerald-500/10 p-3 rounded-xl border border-emerald-500/20 mb-3 flex items-center gap-3">
-            <i data-lucide="accessibility" class="w-4 h-4 text-emerald-400"></i>
-            <div>
-                <p class="text-[10px] text-slate-500 uppercase font-bold">Focus</p>
-                <p class="text-xs text-white">${log.routine}</p>
+        <div class="bg-white/5 p-3 rounded-xl border border-white/10 mb-3 space-y-3">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <div class="p-2 bg-emerald-500/10 rounded-lg">
+                        <i data-lucide="accessibility" class="w-4 h-4 text-emerald-400"></i>
+                    </div>
+                    <div>
+                        <p class="text-[10px] text-slate-500 uppercase font-black">Focus</p>
+                        <p class="text-xs text-white font-bold">${log.routine || 'Étirement'}</p>
+                    </div>
+                </div>
+                <div class="text-right">
+                    <p class="text-[10px] text-slate-500 uppercase font-black">Statut</p>
+                    <div class="flex items-center gap-1 justify-end">
+                        <i data-lucide="${icon}" class="w-3 h-3 ${statusColor}"></i>
+                        <p class="text-[10px] font-black uppercase ${statusColor}">${statusLabel}</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="flex justify-between items-center pt-2 border-t border-white/5">
+                <span class="text-[10px] text-slate-400 uppercase font-bold">Temps effectif</span>
+                <span class="text-xs text-white font-mono bg-white/5 px-2 py-0.5 rounded">${tempsFinaleMin || '0'} min ${tempsFinaleSec || '0'} sec</span>
             </div>
         </div>
     `;
@@ -922,99 +1020,97 @@ function renderCompetenceRadar(logs) {
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
 
-    // --- 1. MENTAL (Moyenne des Moods 1 à 5) ---
-    let totalMoodScore = 0;
-    let moodCount = 0;
-
-    // --- 2. FORCE (Moyenne des SOMMETS de pyramide) ---
-    let pyramidSum = 0;
-    let pyramidCount = 0;
-
-    // --- 3. TECHNIQUE (Moyenne du Ratio Difficulté / Effort) ---
+    // --- Initialisation des accumulateurs ---
+    let totalMoodScore = 0, moodCount = 0;
+    let pyramidSum = 0, pyramidCount = 0;
     let techScores = [];
     const levelMap = { 'jaune': 2, 'vert': 4, 'bleu': 6, 'rouge': 8, 'noir': 9, 'violet': 10 };
 
-    // --- 4. ENDURANCE & RÉCUP ---
-    let totalKm = 0;
-    let zenSessions = 0;
+    // --- Objets pour le groupement temporel ---
+    const dataByWeek = {}; // Pour la Récup
+    const dataByMonth = {}; // Pour l'Endurance
 
     logs.forEach(l => {
-        // MENTAL : Conversion 1-5 vers 0-10
+        const date = new Date(l.date);
+        if (isNaN(date)) return;
+
+        // Identifiants temporels
+        const weekId = `${date.getFullYear()}-W${getWeekNumber(date)}`;
+        const monthId = `${date.getFullYear()}-${date.getMonth()}`;
+
+        // 1. MENTAL & 2. FORCE & 3. TECHNIQUE (Logique conservée)
         if (l.mood) {
             const moodValue = parseInt(l.mood);
             if (moodValue >= 1 && moodValue <= 5) {
-                // Formule : (1->0, 2->2.5, 3->5, 4->7.5, 5->10)
                 totalMoodScore += (moodValue - 1) * 2.5;
                 moodCount++;
             }
         }
 
-        // --- 2. FORCE (Moyenne des SOMMETS de pyramide) ---
-
         if (l.type && l.type.includes('Pyramide Tractions')) {
             let sommet = 0;
-
-            // Méthode A : Extraire le chiffre après "Sommet" dans la note
             if (l.note) {
-                // Cette regex cherche le mot "Sommet" suivi d'un ou plusieurs chiffres
                 const match = l.note.match(/Sommet\s*(\d+)/i);
-                if (match && match[1]) {
-                    sommet = parseInt(match[1]);
-                }
+                if (match) sommet = parseInt(match[1]);
             }
-
-            // Méthode B : Si Sommet non trouvé, on calcule via totalReps
-            // Si total = 1+2+3+2+1 = 9, alors le sommet est racine de 9 = 3.
-            if (sommet === 0 && l.totalReps) {
-                sommet = Math.sqrt(parseInt(l.totalReps));
-            }
-
-            if (sommet > 0) {
-                pyramidSum += sommet;
-                pyramidCount++;
-            }
+            if (sommet === 0 && l.totalReps) sommet = Math.sqrt(parseInt(l.totalReps));
+            if (sommet > 0) { pyramidSum += sommet; pyramidCount++; }
         }
 
-        // TECHNIQUE : Moyenne du ratio
         if (l.type === 'Escalade' && l.details) {
             l.details.forEach(lap => {
                 if (lap.success) {
                     const diff = levelMap[(lap.level || lap.color || "").toLowerCase().trim()] || 0;
-                    const effortInv = 6 - (parseInt(lap.effort) || 5); 
+                    const effortInv = 6 - (parseInt(lap.effort) || 5); 
                     techScores.push((diff + effortInv) / 1.5);
                 }
             });
         }
 
-        if (l.type === 'Course' || l.type === 'Run') totalKm += parseFloat(l.distance) || 0;
-        if (l.type === 'Étirement' || l.type === 'stretching' || l.type === 'Zen') zenSessions++;
+        // --- 4. RÉCUP (Groupement par semaine) ---
+        if (!dataByWeek[weekId]) dataByWeek[weekId] = 0;
+        if (['Étirement', 'stretching', 'Zen'].includes(l.type)) {
+            dataByWeek[weekId]++;
+        }
+
+        // --- 5. ENDURANCE (Groupement par mois) ---
+        if (!dataByMonth[monthId]) dataByMonth[monthId] = 0;
+        if (l.type === 'Course' || l.type === 'Run') {
+            dataByMonth[monthId] += parseFloat(l.distance) || 0;
+        }
     });
 
-    // Calcul des moyennes finales sur la globalité
+    // --- CALCULS DES SCORES FINAUX ---
+
+    // Récup : Moyenne des sessions par semaine (Objectif : 2 sessions/semaine = 10/10)
+    const weeks = Object.values(dataByWeek);
+    const avgZenPerWeek = weeks.length > 0 ? weeks.reduce((a, b) => a + b, 0) / weeks.length : 0;
+    // divisé (avgZenPerWeek/ objectif_nbr_séance)*10, ici c'est 10 (ce simplifie)
+    const recupScore = Math.min(10, avgZenPerWeek); 
+
+    // Endurance : Moyenne des km par mois (Objectif : 200km/mois = 10/10)
+    const months = Object.values(dataByMonth);
+    const avgKmPerMonth = months.length > 0 ? months.reduce((a, b) => a + b, 0) / months.length : 0;
+    const enduranceScore = Math.min(10, (avgKmPerMonth / 200) * 10);
+
     const mentalScore = moodCount > 0 ? totalMoodScore / moodCount : 0;
-    // Calcul final de la force
     const avgSommet = pyramidCount > 0 ? pyramidSum / pyramidCount : 0;
     const forceScore = Math.min(10, (avgSommet / 20) * 10);
-    const techScore = techScores.length > 0 ? techScores.reduce((a,b) => a+b, 0) / techScores.length : 0;
-    
-    // Endurance : 50km/semaine moyenne (basé sur 4 semaines par mois environ)
-    const enduranceScore = Math.min(10, (totalKm / 200) * 10);
-    const recupScore = Math.min(10, (zenSessions / 8) * 10);
+    const techScore = techScores.length > 0 ? techScores.reduce((a, b) => a + b, 0) / techScores.length : 0;
 
     const finalData = [forceScore, enduranceScore, mentalScore, recupScore, techScore];
 
-    // Rendu Chart.js
+    // --- Rendu Chart.js ---
     if (window.radarInstance) window.radarInstance.destroy();
     window.radarInstance = new Chart(ctx, {
         type: 'radar',
         data: {
-            labels: ['Force (Sommet)', 'Endurance', 'Mental (Mood)', 'Récup', 'Technique'],
+            labels: ['Force (Sommet)', 'Endurance', 'Mental', 'Récup (Hebdo)', 'Technique'],
             datasets: [{
                 label: 'Maîtrise Globale',
                 data: finalData,
                 backgroundColor: 'rgba(168, 85, 247, 0.2)',
                 borderColor: '#a855f7',
-                pointBackgroundColor: '#a855f7',
                 borderWidth: 2
             }]
         },
@@ -1033,6 +1129,23 @@ function renderCompetenceRadar(logs) {
         }
     });
 }
+
+ /** * Fonction utilitaire pour obtenir le numéro de semaine 
+
+ */
+
+function getWeekNumber(d) {
+
+    d = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+
+    d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
+
+    var yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+
+    return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+
+} 
+
 
 // On crée une variable à l'extérieur pour stocker l'instance du graphique
 let radarChartInstance = null;
@@ -1109,6 +1222,7 @@ function renderRadarChart(logs,objectifs) {
                 pointRadius: 0
             }]
         },
+        
         options: {
             responsive: true,
             maintainAspectRatio: false,
@@ -1120,7 +1234,7 @@ function renderRadarChart(logs,objectifs) {
                     angleLines: { color: 'rgba(255,255,255,0.1)' },
                     pointLabels: {
                         color: '#94a3b8',
-                        font: { size: 12, weight: 'bold' },
+                        font: { size: 10, weight: 'bold' },
                         callback: (label, index) => `${label}: ${Math.round(realValues[index])}m`
                     }
                 }
@@ -1715,49 +1829,59 @@ let isRunning = false;
 let runStartTime = null; // Stocke le moment précis du début
 let runSecondsBeforePause = 0; // Stocke le cumul des sessions précédentes (si pause)
 
+function saveRunState() {
+    localStorage.setItem('run_startTime', runStartTime);
+    localStorage.setItem('run_secondsBeforePause', runSecondsBeforePause);
+    localStorage.setItem('run_isRunning', isRunning);
+}
+
+function clearRunState() {
+    localStorage.removeItem('run_startTime');
+    localStorage.removeItem('run_secondsBeforePause');
+    localStorage.removeItem('run_isRunning');
+}
+
 function toggleRunTimer() {
     const btn = document.getElementById('btn-run');
     
     if (!isRunning) {
-        // --- DÉMARRAGE / REPRISE ---
         isRunning = true;
         btn.innerText = "Pause";
         btn.classList.replace('bg-blue-600', 'bg-orange-500');
 
-        // On définit le point de départ : "Maintenant" moins le temps déjà écoulé
         runStartTime = Date.now();
+        saveRunState(); // <--- SAUVEGARDE
 
-        runInterval = setInterval(() => {
-            // Calcul du temps écoulé total
-            const now = Date.now();
-            const totalElapsedMs = (now - runStartTime) + (runSecondsBeforePause * 1000);
-            runSeconds = Math.floor(totalElapsedMs / 1000);
-            
-            updateRunDisplay();
-
-            // Notification toutes les minutes (pour ne pas saturer le système)
-            if (runSeconds % 60 === 0 && runSeconds > 0) {
-                sendTimerNotification(runSeconds, "Course en cours");
-            }
-        }, 1000);
-
-        // Demander la permission pour les notifications au premier clic
-        if (Notification.permission === 'default') {
-            Notification.requestPermission();
-        }
-        
+        launchRunInterval();
     } else {
-        // --- PAUSE ---
         isRunning = false;
         btn.innerText = "Reprendre";
         btn.classList.replace('bg-orange-500', 'bg-blue-600');
         
-        // On sauvegarde le temps accumulé avant de couper l'intervalle
         runSecondsBeforePause = runSeconds;
         clearInterval(runInterval);
         
+        saveRunState(); // <--- SAUVEGARDE
         sendTimerNotification(runSeconds, "Course en pause");
     }
+}
+
+// On isole la boucle pour pouvoir la relancer au démarrage
+function launchRunInterval() {
+    if (runInterval) clearInterval(runInterval);
+    
+    runInterval = setInterval(() => {
+        const now = Date.now();
+        // On recalcule TOUJOURS par rapport à l'heure de départ stockée
+        const totalElapsedMs = (now - runStartTime) + (runSecondsBeforePause * 1000);
+        runSeconds = Math.floor(totalElapsedMs / 1000);
+        
+        updateRunDisplay();
+
+        if (runSeconds % 60 === 0 && runSeconds > 0) {
+            sendTimerNotification(runSeconds, "Course en cours");
+        }
+    }, 1000);
 }
 
 async function sendTimerNotification(seconds, status) {
@@ -1786,42 +1910,75 @@ function updateRunDisplay() {
 }
 
 function stopAndSaveRun() {
+    // 1. Arrêt du chrono et de l'état
     clearInterval(runInterval);
     isRunning = false;
 
     const distInput = document.getElementById('run-distance');
     const distance = parseFloat(distInput.value) || 0;
 
+    // 2. Validation
     if (distance <= 0) {
         alert("Saisis une distance pour enregistrer ta course !");
         return;
     }
 
-    const totalMinutes = runSeconds / 60;
-    const paceDecimal = totalMinutes / distance;
-    const paceMin = Math.floor(paceDecimal);
-    const paceSec = Math.round((paceDecimal - paceMin) * 60);
-    const finalPace = `${paceMin}:${paceSec.toString().padStart(2, '0')}`;
+    // 3. Calcul de l'allure haute précision (Minutes:Secondes au kilomètre)
+    // On utilise le nombre TOTAL de secondes accumulées
+    const totalSeconds = runSeconds; 
+    const secondsPerKm = totalSeconds / distance;
 
+    const paceMin = Math.floor(secondsPerKm / 60);
+    const paceSec = Math.round(secondsPerKm % 60); 
+    
+    // Gestion du cas particulier où l'arrondi des secondes arrive à 60
+    let finalPaceMin = paceMin;
+    let finalPaceSec = paceSec;
+    if (finalPaceSec === 60) {
+        finalPaceMin += 1;
+        finalPaceSec = 0;
+    }
+
+    const finalPaceStr = `${finalPaceMin}:${finalPaceSec.toString().padStart(2, '0')}`;
+
+    // 4. Préparation des données pour IndexedDB (via le Mood Selector)
     const runData = {
         type: 'Course',
         distance: distance,
-        duration: document.getElementById('run-timer').innerText,
-        pace: finalPace,
-        note: `${distance}km en ${finalPace} min/km`
+        duration: document.getElementById('run-timer').innerText, // Temps formaté HH:MM:SS
+        durationSeconds: totalSeconds, // Optionnel: utile pour tes futurs graphiques
+        pace: finalPaceStr,
+        paceRaw: secondsPerKm, // Optionnel: utile pour calculer une moyenne de vitesse plus tard
+        timestamp: new Date().toISOString(),
+        note: `${distance}km en ${finalPaceStr} min/km`
     };
 
-    // Préparation de l'affichage du Mood Selector
+    // 5. Nettoyage de la persistance (LocalStorage)
+    clearRunState(); 
+
+    // 6. Mise à jour de l'UI pour afficher le sélecteur d'humeur
+    // On bascule sur la section muscu car c'est là que se trouve ton conteneur d'exercice actif
     showSection('muscu'); 
     document.getElementById('exercise-menu').classList.add('hidden');
     document.getElementById('exercise-active').classList.remove('hidden');
     
+    // Envoi vers le sélecteur final (qui fera le db.add)
     showMoodSelector(runData);
 
-    // Reset du chrono pour la suite
+    // 7. Reset complet du chrono pour la prochaine fois
     runSeconds = 0;
+    runSecondsBeforePause = 0;
     distInput.value = "";
     updateRunDisplay();
+    
+    // Nettoyage des notifications
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.ready.then(registration => {
+            registration.getNotifications({ tag: 'run-timer' }).then(notifications => {
+                notifications.forEach(n => n.close());
+            });
+        });
+    }
 }
 
 function finalSave2(mood) {
@@ -1862,29 +2019,39 @@ let currentInstrument = "";
 
 function startMusicSession(instrument) {
     currentInstrument = instrument;
+    musicStartTime = Date.now();
+
+    // SAUVEGARDE : On écrit dans le localStorage
+    localStorage.setItem('active_music_start', musicStartTime);
+    localStorage.setItem('active_music_instrument', instrument);
     
     // UI Switch
     document.getElementById('music-setup').classList.add('hidden');
     document.getElementById('music-active').classList.remove('hidden');
     document.getElementById('active-instrument-name').innerText = instrument;
 
-    // On enregistre l'heure précise du clic
-    musicStartTime = Date.now();
+    launchMusicInterval();
+}
 
+// On isole la boucle dans une fonction pour pouvoir la relancer au démarrage
+function launchMusicInterval() {
+    if (musicInterval) clearInterval(musicInterval);
+    
     musicInterval = setInterval(() => {
-        // Calcul de la différence entre "maintenant" et le "début"
-        const now = Date.now();
-        const totalMs = now - musicStartTime;
-        const totalSeconds = Math.floor(totalMs / 1000);
+        const startTime = localStorage.getItem('active_music_start');
+        if (!startTime) {
+            stopMusicSession();
+            return;
+        }
+
+        const totalSeconds = Math.floor((Date.now() - startTime) / 1000);
         
-        // Mise à jour de l'affichage
         const mins = Math.floor(totalSeconds / 60).toString().padStart(2, '0');
         const secs = (totalSeconds % 60).toString().padStart(2, '0');
         document.getElementById('music-timer').innerText = `${mins}:${secs}`;
 
-        // Envoi d'une notification toutes les 2 minutes pour le suivi
         if (totalSeconds % 120 === 0 && totalSeconds > 0) {
-            sendMusicNotification(totalSeconds, instrument);
+            sendMusicNotification(totalSeconds, localStorage.getItem('active_music_instrument'));
         }
     }, 1000);
 }
@@ -1892,33 +2059,40 @@ function startMusicSession(instrument) {
 function stopMusicSession() {
     clearInterval(musicInterval);
     
-    // Calcul final ultra-précis
-    const finalSeconds = Math.floor((Date.now() - musicStartTime) / 1000);
+    // Récupération depuis le storage pour être sûr
+    const savedStart = localStorage.getItem('active_music_start');
+    const instrumentName = localStorage.getItem('active_music_instrument') || 'Musique';
+
+    if (!savedStart) return;
+
+    const finalSeconds = Math.floor((Date.now() - savedStart) / 1000);
     const durationMins = Math.floor(finalSeconds / 60);
     const durationStr = durationMins > 0 ? `${durationMins} min` : `${finalSeconds} sec`;
     
-    const instrumentName = currentInstrument || 'Musique';
-
     const musicData = {
         type: 'Musique',
-        exercise: instrumentName, // 'exercise' pour la compatibilité journal
+        exercise: instrumentName,
         instrument: instrumentName,
-        duration: finalSeconds,   // Nombre pur pour l'histogramme de volume
-        durationStr: durationStr, // Texte pour le journal de bord
-        totalSeconds: finalSeconds,
-        note: `Session de ${instrumentName} (${durationStr})`
+        duration: finalSeconds,
+        durationStr: durationStr,
+        note:`Session de ${instrumentName} (${durationStr})`,
+        timestamp: new Date().toISOString()
     };
+
+    // NETTOYAGE : Très important
+    localStorage.removeItem('active_music_start');
+    localStorage.removeItem('active_music_instrument');
 
     // Reset UI
     document.getElementById('music-setup').classList.remove('hidden');
     document.getElementById('music-active').classList.add('hidden');
     document.getElementById('music-timer').innerText = "00:00";
     
-    // Nettoyage de la notification
     clearMusicNotification();
-
     showMoodSelector(musicData);
 }
+
+
 
 
 async function sendMusicNotification(seconds, instrument) {
@@ -2279,11 +2453,12 @@ const STRETCH_DATA = {
     
 };
 
+
+let stretchTimer = null;
 let stretchIndex = 0;
-let stretchTimer;
-let currentRoutine = [];
-
-
+let currentRoutine = null;
+let totalTimePracticed = 0; // Initialisation du compteur
+let currentRoutineName = "";
 
 function loadStretchMenu() {
     const menu = document.getElementById('stretch-menu');
@@ -2306,13 +2481,17 @@ function loadStretchMenu() {
     }).join('');
     lucide.createIcons();
 }
+
 // --- CORRECTION ÉTIREMENTS ---
+
 function startStretchRoutine(type) {
     const routineData = STRETCH_DATA[type];
     if (!routineData) return;
 
-    currentRoutine = routineData.exos; // ON PREND LE TABLEAU EXOS
+    currentRoutine = routineData.exos; 
     stretchIndex = 0;
+    currentRoutineName = type;
+    totalTimePracticed = 0; // On remet à zéro pour la nouvelle séance
     
     document.getElementById('stretch-menu').classList.add('hidden');
     document.getElementById('stretch-active').classList.remove('hidden');
@@ -2322,15 +2501,19 @@ function startStretchRoutine(type) {
 }
 
 function runStretchStep() {
+    // Vérifier si la routine est finie
     if (!currentRoutine || stretchIndex >= currentRoutine.length) {
-        finishStretch();
+        finishStretch(false);
         return;
     }
 
     let step = currentRoutine[stretchIndex];
-    let timeLeft = step.d;
+    let initialTime = step.d; 
+    let timeLeft = initialTime;
     
-    document.getElementById('stretch-exercise').innerHTML = `
+    // Affichage de l'exercice
+    const exerciseEl = document.getElementById('stretch-exercise');
+    exerciseEl.innerHTML = `
         <div class="flex flex-col items-center gap-4">
             <div class="w-20 h-20 bg-emerald-500/10 rounded-full flex items-center justify-center border border-emerald-500/20">
                 <i data-lucide="${step.img || 'accessibility'}" class="w-10 h-10 text-emerald-400"></i>
@@ -2340,6 +2523,7 @@ function runStretchStep() {
     `;
     
     document.getElementById('stretch-timer').innerText = timeLeft;
+    updateTimerCircle(100); 
     lucide.createIcons();
     
     if (stretchTimer) clearInterval(stretchTimer);
@@ -2347,32 +2531,78 @@ function runStretchStep() {
 
     stretchTimer = setInterval(() => {
         timeLeft--;
+        totalTimePracticed++; // Cumul du temps réel
+        
         document.getElementById('stretch-timer').innerText = timeLeft;
+        
+        const percentage = (timeLeft / initialTime) * 100;
+        updateTimerCircle(percentage);
         
         if (timeLeft <= 0) {
             clearInterval(stretchTimer);
             stretchIndex++;
             if (typeof beep === "function") beep(600, 200);
+            
+            // On attend 2 secondes avant de lancer le suivant ou de finir
             setTimeout(runStretchStep, 2000);
         }
     }, 1000);
 }
 
-function finishStretch() {
-    // On calcule la durée réelle effectuée
-    const totalDuration = currentRoutine.reduce((acc, exo) => acc + exo.d, 0); 
+function skipStretchStep() {
+    if (stretchTimer) clearInterval(stretchTimer);
     
+    // Note : On ne remet pas totalTimePracticed à zéro ici, 
+    // on veut garder le temps passé sur l'exo qu'on vient de quitter.
+    
+    stretchIndex++;
+    runStretchStep();
+}
+
+function stopStretch() {
+    if (stretchTimer) clearInterval(stretchTimer);
+
+    // Si on a fait plus de 5s, on enregistre comme "interrompu"
+    if (totalTimePracticed > 5) {
+        finishStretch(true); 
+    } else {
+        resetStretchUI();
+    }
+}
+
+function finishStretch(wasInterrupted = false) {
+    if (stretchTimer) clearInterval(stretchTimer);
+
+    // On récupère les données via la variable globale qu'on a définie au début
+    const routineName = STRETCH_DATA[currentRoutineName];
+    
+    // Calcul de la durée théorique (en secondes)
+    const theoSec = routineName ? routineName.duration * 60 : 0;
+
     const data = {
         type: 'Étirement',
-        routine: document.getElementById('stretch-name').innerText,
-        duration: totalDuration, // En secondes pour l'histogramme
-        durationStr: Math.round(totalDuration / 60) + " min"
+        routine: currentRoutineName,
+        duration: totalTimePracticed, 
+        durationTheo: theoSec,
+        durationStr: Math.round(totalTimePracticed / 60) + " min",
+        durationStr2: Math.round(totalTimePracticed / 60),
+        completed: !wasInterrupted 
     };
+
+    resetStretchUI();
     
-    document.getElementById('stretch-menu').classList.remove('hidden'); // On affiche le menu
-    document.getElementById('stretch-active').classList.add('hidden'); // On cache l'actif
-    
-    showMoodSelector(data);
+    // IMPORTANT : Vérifie que cette fonction existe dans ton code
+    if (typeof showMoodSelector === "function") {
+        showMoodSelector(data);
+    }
+}
+
+function resetStretchUI() {
+    document.getElementById('stretch-active').classList.add('hidden');
+    document.getElementById('stretch-menu').classList.remove('hidden');
+    stretchIndex = 0;
+    currentRoutine = null;
+    if (stretchTimer) clearInterval(stretchTimer);
 }
 
 function updateTimerCircle(percent) {
@@ -2381,6 +2611,9 @@ function updateTimerCircle(percent) {
     const offset = circumference - (percent / 100) * circumference;
     circle.style.strokeDashoffset = offset;
 }
+
+
+
 
 
 let currentChartIndex = 0;
@@ -2553,7 +2786,18 @@ async function updateGoalsDashboard() {
     // --- 3. ELITE ---
     let eliteHtml = `<h3 class="text-[10px] font-bold text-violet-500 uppercase tracking-widest mb-3 mt-6">Performance Elite</h3>`;
     eliteGoals.forEach(g => {
-        const val = Math.max(...logs.filter(l => l.type === g.type).map(l => parseFloat(l.distance) || 0), 0);
+        let val = 0;
+
+        // Si c'est un objectif de type "top" (comme un bloc Noir ou Violet)
+        if (g.unit === "top") {
+            // On utilise la fonction calculateBest que nous avons corrigée ensemble
+            val = calculateBest(logs, g); 
+        } 
+        // Sinon, on garde la logique de distance/perf classique
+        else {
+            val = Math.max(...logs.filter(l => l.type === g.type).map(l => parseFloat(l.distance) || 0), 0);
+        }
+
         checkSuccess(val, g.target);
         eliteHtml += renderGoalBar(g.label, val, g.target, g.unit, 'violet');
     });
@@ -2616,40 +2860,65 @@ async function updateGoalsDashboard() {
 }
 
 
+// 1. CORRECTION DE CALCULATEBEST
+function calculateBest(logs, goal) {
+    const relevant = logs.filter(l => l.type === goal.type || l.exercise === goal.type);
+    let best = 0;
 
+    relevant.forEach(l => {
+        let val = 0;
+        if (goal.unit === "km") val = parseFloat(l.distance) || 0;
+        else if (goal.fingers) val = (l.fingers == goal.fingers) ? (parseInt(l.work) || 0) : 0;
+        else if (goal.unit === "sommet") val = parseInt(l.note?.match(/Sommet (\d+)/)?.[1]) || 0;
+        
+        // CORRECTION ICI : On compte le nombre de tops réussis de cette couleur dans la séance
+        else if (goal.unit === "top" && goal.color) {
+            if (l.details && Array.isArray(l.details)) {
+                val = l.details.filter(lap => {
+                    const lapColor = (lap.level || lap.color || "").toLowerCase().trim();
+                    const goalColor = goal.color.toLowerCase().trim();
+                    return lapColor === goalColor && lap.success === true;
+                }).length;
+            }
+        }
+        
+        if (val > best) best = val;
+    });
+    return best;
+}
+
+// 2. CORRECTION DES RECORDS (Ordre des couleurs)
 function renderPersonalRecords(logs) {
-    // 1. Meilleure Distance (Course)
     const bestRun = logs.filter(l => l.type === 'Course').sort((a,b) => b.distance - a.distance)[0];
-    
-    // 2. Meilleur Sommet (Pyramide)
     const bestPyr = logs.filter(l => l.type === 'Pyramide Tractions')
-                        .sort((a,b) => (parseInt(b.note.match(/Sommet (\d+)/)?.[1]) || 0) - (parseInt(a.note.match(/Sommet (\d+)/)?.[1]) || 0))[0];
+                        .sort((a,b) => (parseInt(b.note?.match(/Sommet (\d+)/)?.[1]) || 0) - (parseInt(a.note?.match(/Sommet (\d+)/)?.[1]) || 0))[0];
 
-    // 3. Meilleure Cotation (Escalade)
+    // L'ordre doit être exact (minuscules)
     const colorOrder = ['blanc', 'jaune', 'vert', 'bleu', 'rouge', 'noir', 'violet'];
-    let absoluteBestColor = "---";
+    let absoluteBestColor = "";
     let bestColorLog = null;
 
     logs.filter(l => l.type === 'Escalade').forEach(l => {
         l.details?.forEach(lap => {
             if (lap.success) {
-                const currentIndex = colorOrder.indexOf(lap.color);
+                const lapColor = (lap.level || lap.color || "").toLowerCase().trim();
+                const currentIndex = colorOrder.indexOf(lapColor);
                 const bestIndex = colorOrder.indexOf(absoluteBestColor);
+                
                 if (currentIndex > bestIndex) {
-                    absoluteBestColor = lap.color;
+                    absoluteBestColor = lapColor;
                     bestColorLog = l;
                 }
             }
         });
     });
 
-    // 4. Meilleure Suspension
     const bestHang = logs.filter(l => l.type === 'Suspension').sort((a,b) => b.work - a.work)[0];
 
     const records = [
         { label: "Plus longue distance", val: bestRun ? bestRun.distance + " km" : "---", date: bestRun?.timestamp },
         { label: "Plus haut sommet", val: bestPyr ? "Sommet " + (bestPyr.note.match(/Sommet (\d+)/)?.[1] || "?") : "---", date: bestPyr?.timestamp },
-        { label: "Cotation Max", val: absoluteBestColor.toUpperCase(), date: bestColorLog?.timestamp },
+        { label: "Cotation Max Bloc", val: absoluteBestColor ? absoluteBestColor.toUpperCase() : "---", date: bestColorLog?.timestamp },
         { label: "Max Suspension", val: bestHang ? bestHang.work + " s" : "---", date: bestHang?.timestamp }
     ];
 
@@ -2664,25 +2933,6 @@ function renderPersonalRecords(logs) {
             `).join('')}
         </div>
     `;
-}
-
-// Fonction utilitaire pour extraire le meilleur score selon le type
-function calculateBest(logs, goal) {
-    const relevant = logs.filter(l => l.type === goal.type || l.exercise === goal.type);
-    let best = 0;
-    relevant.forEach(l => {
-        let val = 0;
-        if (goal.unit === "km") val = parseFloat(l.distance) || 0;
-        else if (goal.fingers) val = (l.fingers == goal.fingers) ? (parseInt(l.work) || 0) : 0;
-        else if (goal.unit === "sommet") val = parseInt(l.note?.match(/Sommet (\d+)/)?.[1]) || 0;
-        else if (goal.unit === "top" && goal.color) {
-            // Si on a réussi au moins un bloc de cette couleur dans cette séance
-            const hasSuccess = l.details?.some(lap => lap.color === goal.color && lap.success);
-            val = hasSuccess ? 1 : 0;
-        }
-        if (val > best) best = val;
-    });
-    return best;
 }
 
 
