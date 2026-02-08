@@ -27,7 +27,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         const btn = document.getElementById('btn-run');
         if(btn) btn.innerText = "Reprendre";
     }
-    checkActiveMusicSession();
+    setTimeout(() => {
+        checkActiveMusicSession();
+    }, 50);
 });
 
 function checkActiveMusicSession() {
@@ -35,19 +37,20 @@ function checkActiveMusicSession() {
     if (savedMusicStart) {
         const instrument = localStorage.getItem('active_music_instrument');
         
-        // 1. Forcer l'affichage de la section Musique (l'ID dépend de ton routeur)
-        // Si tu as une fonction showSection('musique'), appelle-la ici.
-        if (typeof showSection === 'function') {
-            showSection('musique'); 
-        }
+        // On affiche la section proprement
+        showSection('musique'); 
 
-        // 2. Mettre à jour l'UI interne de la section musique
-        document.getElementById('music-setup').classList.add('hidden');
-        document.getElementById('music-active').classList.remove('hidden');
-        document.getElementById('active-instrument-name').innerText = instrument;
-        
-        // 3. Relancer la boucle visuelle
-        launchMusicInterval();
+        // On bascule l'affichage interne du timer
+        const setup = document.getElementById('music-setup');
+        const active = document.getElementById('music-active');
+        if (setup && active) {
+            setup.classList.add('hidden');
+            active.classList.remove('hidden');
+            document.getElementById('active-instrument-name').innerText = instrument;
+            
+            // On relance la boucle du chrono
+            launchMusicInterval();
+        }
     }
 }
 
@@ -65,29 +68,34 @@ if ('serviceWorker' in navigator) {
         }
 // --- NAVIGATION ---
 function showSection(id) {
-    // Masquer toutes les sections
+    // 1. Masquer toutes les sections
     document.querySelectorAll('main > section').forEach(s => s.classList.add('hidden'));
-    // Afficher la bonne
-    document.getElementById('section-' + id).classList.remove('hidden');
     
-    // Mettre à jour les couleurs de la barre de navigation
+    // 2. Afficher la bonne section
+    const targetSection = document.getElementById('section-' + id);
+    if (targetSection) targetSection.classList.remove('hidden');
+    
+    // 3. Mettre à jour la navigation
     document.querySelectorAll('nav button').forEach(btn => {
         btn.classList.replace('text-violet-500', 'text-slate-400');
+        
+        // Si on n'a pas d'event (appel manuel), on cherche le bouton qui correspond à l'id
+        if (!window.event && btn.getAttribute('onclick') && btn.getAttribute('onclick').includes(`'${id}'`)) {
+            btn.classList.replace('text-slate-400', 'text-violet-500');
+        }
     });
-    // L'élément cliqué devient violet (nécessite de passer 'event' ou de chercher le bouton)
-    if(window.event) {
+
+    // Si c'est un clic, on active le bouton cliqué normalement
+    if (window.event && window.event.currentTarget) {
         window.event.currentTarget.classList.replace('text-slate-400', 'text-violet-500');
-    
     }
-    if (id === 'stats') {
-        updateStatsDashboard();
-    }
-    if (id === 'stretching') {
-        loadStretchMenu(); // On génère la liste des 20 programmes
-    }
+
+    // 4. Triggers spécifiques
+    if (id === 'stats') updateStatsDashboard();
+    if (id === 'stretching') loadStretchMenu();
     if (id === 'objectifs') {
         renderSchedule();
-        updateGoalsDashboard(); // La fonction pour les barres de progression
+        updateGoalsDashboard();
     }
 }
 
