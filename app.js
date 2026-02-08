@@ -1282,6 +1282,8 @@ function renderFatigueChart(logs) {
             ]
         },
         options: {
+            responsive: true,
+            maintainAspectRatio: false, // Autorise le graphique à remplir toute la hauteur
             plugins: { legend: { display: false } },
             scales: { y: { beginAtZero: true } }
         }
@@ -1580,6 +1582,8 @@ function renderMainChart(logs) {
             }]
         },
         options: {
+            responsive: true,
+            maintainAspectRatio: false, // Autorise le graphique à remplir toute la hauteur
             plugins: { legend: { display: false } },
             scales: { 
                 y: { min: 1, max: 5, grid: { color: 'rgba(255,255,255,0.05)' } },
@@ -1613,6 +1617,8 @@ function renderRunChart(data) {
             }]
         },
         options: {
+            responsive: true,
+            maintainAspectRatio: false, // Autorise le graphique à remplir toute la hauteur
             scales: {
                 y: { 
                     reverse: true, // Plus le chiffre est petit, plus on court vite !
