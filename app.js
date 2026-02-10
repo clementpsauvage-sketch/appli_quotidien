@@ -1287,45 +1287,75 @@ function renderRadarChart(logs,objectifs) {
 function renderFatigueChart(logs) {
     const ctx = document.getElementById('fatigueChart').getContext('2d');
     
-    // On génère les 28 derniers jours
+    // 1. Générer les labels des 28 derniers jours (Axe X)
     const last28Days = [...Array(28).keys()].map(i => {
         const d = new Date();
         d.setDate(d.getDate() - i);
         return d.toISOString().split('T')[0];
     }).reverse();
 
+    // 2. Calculer les scores quotidiens en excluant Musique et Étirement
     const dailyScores = last28Days.map(date => {
         return logs
-            .filter(l => l.timestamp.startsWith(date))
-            .reduce((sum, l) => sum + (l.mood || 0), 0); // Utilise mood ou un score d'effort
+            .filter(l => 
+                l.timestamp.startsWith(date) && 
+                l.type !== "Musique" && 
+                l.type !== "Étirement"
+            )
+            .reduce((sum, l) => sum + (l.mood || 0), 0);
     });
 
-    // Calcul charge aiguë (moyenne 7j) et chronique (28j)
+    // 3. Calcul Charge Aiguë (Moyenne mobile 7 jours)
     const acuteLoad = dailyScores.map((_, i, arr) => {
         const slice = arr.slice(Math.max(0, i - 6), i + 1);
         return slice.reduce((a, b) => a + b, 0) / slice.length;
     });
 
+    // 4. Calcul Charge Chronique (Moyenne mobile 28 jours)
+    const chronicLoad = dailyScores.map((_, i, arr) => {
+        const slice = arr.slice(0, i + 1); 
+        return slice.reduce((a, b) => a + b, 0) / slice.length;
+    });
+
+    // 5. Rendu du graphique avec Chart.js
     new Chart(ctx, {
         type: 'line',
         data: {
             labels: last28Days,
             datasets: [
                 {
-                    label: 'Charge 7j (Aiguë)',
+                    label: 'Charge Aiguë (7j) - Fatigue',
                     data: acuteLoad,
-                    borderColor: '#8b5cf6',
+                    borderColor: '#8b5cf6', // Violet
+                    backgroundColor: 'rgba(139, 92, 246, 0.1)',
                     tension: 0.4,
-                    fill: true,
-                    backgroundColor: 'rgba(139, 92, 246, 0.1)'
+                    fill: true
+                },
+                {
+                    label: 'Charge Chronique (28j) - Forme',
+                    data: chronicLoad,
+                    borderColor: '#10b981', // Vert
+                    borderDash: [5, 5], // Pointillés pour la forme de base
+                    tension: 0.4,
+                    fill: false
                 }
             ]
         },
         options: {
             responsive: true,
-            maintainAspectRatio: false, // Autorise le graphique à remplir toute la hauteur
-            plugins: { legend: { display: false } },
-            scales: { y: { beginAtZero: true } }
+            maintainAspectRatio: false,
+            plugins: { 
+                legend: { 
+                    display: true,
+                    position: 'top' 
+                } 
+            },
+            scales: { 
+                y: { 
+                    beginAtZero: true,
+                    title: { display: true, text: 'Intensité cumulée' }
+                } 
+            }
         }
     });
 }
