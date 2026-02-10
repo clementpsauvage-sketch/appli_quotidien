@@ -32,6 +32,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     }, 50);
 });
 
+
+
+
+
+
+
+
+
 function checkActiveMusicSession() {
     const savedMusicStart = localStorage.getItem('active_music_start');
     if (savedMusicStart) {
@@ -563,8 +571,8 @@ function renderStretchDetails(log) {
     const tempsMinuteArrondi = Number(log.durationStr2)
 
     tempsCalcule = tempsSeconde - 60*tempsMinuteArrondi
-    if (tempsCalcule <= 0) {
-        tempsFinaleSec = 1 + tempsCalcule
+    if (tempsCalcule < 0) {
+        tempsFinaleSec = 60 + tempsCalcule
         tempsFinaleMin = tempsMinuteArrondi -1
     } else {
         tempsFinaleSec = tempsCalcule
@@ -698,9 +706,22 @@ async function renderLogs(filter = 'all') {
     let logs = await DB.getLogs(); 
 
     const filteredLogs = logs.filter(l => {
+        // 1. Filtrage par type (onglet)
         const matchesType = (filter === 'all' || l.type.toLowerCase() === filter.toLowerCase());
-        const text = (l.type + (l.note || "") + (l.exercise || "")).toLowerCase();
-        return matchesType && text.includes(searchTerm);
+        
+        // 2. Préparation de la chaîne de recherche (incluant la date formatée)
+        const formattedDate = l.date || new Date(l.timestamp).toLocaleDateString('fr-FR');
+        
+        // On combine tout ce qui est "cherchable" : type, note, exercice ET date
+        const searchableText = [
+            l.type,
+            l.note,
+            l.exercise,
+            formattedDate
+        ].join(' ').toLowerCase();
+
+        // 3. Vérification si le terme de recherche est présent
+        return matchesType && searchableText.includes(searchTerm);
     });
 
     const moodColors = { 1: '#ef4444', 2: '#f97316', 3: '#eab308', 4: '#3b82f6', 5: '#a855f7' };
@@ -993,6 +1014,7 @@ async function updateStatsDashboard() {
     if (typeof renderCompetenceRadar === "function") {
         renderCompetenceRadar(logs);
     }
+    
 }
 
 function renderArmBalanceChart(data) {
@@ -2298,6 +2320,7 @@ function detectPitch(buffer, sampleRate) {
 
 
 const STRETCH_DATA = {
+// Parfait
     "Grimpeur - Grand Écart & Bassin": {
     "type": "Mixte",
     "duration": 15,
@@ -2322,7 +2345,7 @@ const STRETCH_DATA = {
         { "name": "Grand écart latéral actif", "d": 120,"img": "expand" },
         { "name": "Grand écart facial contrôlé (option)", "d": 60, "img": "expand" }
     ]},
-
+//10 min 
     "Quotidien Forme": { "type": "Mixte", "duration": 10, "exos": [
         { "name": "Cercle cou/épaules", "d": 45, "img": "refresh-cw" },
         { "name": "Dos de chat / Vache", "d": 60, "img": "cat" },
@@ -2333,7 +2356,7 @@ const STRETCH_DATA = {
         { "name": "Étirement latéral debout", "d": 90, "img": "side-stretch" },
         { "name": "Coup de pied fessier (dyn)", "d": 45, "img": "activity" }
     ]},
-
+//7min très bien
     "Réveil Articulaire": { "type": "Actif", "duration": 7, "exos": [
         { "name": "Moulinets bras", "d": 60, "img": "rotate-cw" },
         { "name": "Poignets & Doigts", "d": 60, "img": "hand" },
@@ -2343,8 +2366,8 @@ const STRETCH_DATA = {
         { "name": "Cercle de hanches", "d": 60, "img": "circle" },
         { "name": "Ouverture cage (Y-W)", "d": 60, "img": "expand" }
     ]},
-
-    "Ouverture Bassin Profonde": { "type": "Passif", "duration": 30, "exos": [
+// 27 min manque des min
+    "Ouverture Bassin Profonde": { "type": "Passif", "duration": 27, "exos": [
         { "name": "Papillon", "d": 180, "img": "unfold-more" },
         { "name": "90/90 Hanches (G)", "d": 120, "img": "rotate-ccw" },
         { "name": "90/90 Hanches (D)", "d": 120, "img": "rotate-ccw" },
@@ -2357,42 +2380,89 @@ const STRETCH_DATA = {
         { "name": "Demi-grand écart (D)", "d": 150, "img": "stretch" },
         { "name": "Posture du Héros", "d": 120, "img": "user" }
     ]},
+// 50 min un peu long
+    "Full Body Récupération": { "type": "Passif", "duration": 50, "exos": [
+        // --- Haut du Corps & Dos (10.5 min / 630s) ---
+        { "name": "Posture de l'enfant (Respiration)", "d": 90, "img": "baby" },
+        { "name": "Posture de l'enfant (Bras G)", "d": 90, "img": "chevron-left" },
+        { "name": "Posture de l'enfant (Bras D)", "d": 90, "img": "chevron-right" },
+        { "name": "Chien tête en bas (Pédalage)", "d": 90, "img": "dog" },
+        { "name": "Chien tête en bas (Statique)", "d": 90, "img": "dog" },
+        { "name": "Cobra (Ouverture douce)", "d": 90, "img": "snake" },
+        { "name": "Posture du chiot (Front au sol)", "d": 90, "img": "dog" },
 
-    "Full Body Récupération": { "type": "Passif", "duration": 40, "exos": [
-        { "name": "Posture de l'enfant", "d": 120, "img": "baby" },
-        { "name": "Chien tête en bas", "d": 120, "img": "dog" },
-        { "name": "Cobra (Ouverture thoracique)", "d": 120, "img": "snake" },
-        { "name": "Posture du chiot (Épaules)", "d": 150, "img": "dog" },
-        { "name": "Étirement fléchisseurs doigts", "d": 120, "img": "hand" },
-        { "name": "Torsion avant-bras (Sol)", "d": 120, "img": "rotate-ccw" },
-        { "name": "Fente basse - Psoas G", "d": 180, "img": "arrow-up-right" },
-        { "name": "Fente basse - Psoas D", "d": 180, "img": "arrow-up-right" },
-        { "name": "Pigeon - Fessier G", "d": 210, "img": "pigeon" },
-        { "name": "Pigeon - Fessier D", "d": 210, "img": "pigeon" },
-        { "name": "Grenouille (Adducteurs)", "d": 240, "img": "layout-grid" },
-        { "name": "Pince assise (Ischios)", "d": 180, "img": "arrow-down" },
-        { "name": "Écart facial assis", "d": 180, "img": "columns" },
-        { "name": "Papillon", "d": 180, "img": "unfold-more" },
-        { "name": "Torsion colonne G", "d": 150, "img": "repeat" },
-        { "name": "Torsion colonne D", "d": 150, "img": "repeat" },
-        { "name": "Bébé heureux", "d": 120, "img": "smile" },
-        { "name": "Jambes au mur + Respiration", "d": 300, "img": "wall" }
+        // --- Poignets & Avant-bras (6 min / 360s) ---
+        { "name": "Étirement fléchisseurs doigts", "d": 90, "img": "hand" },
+        { "name": "Étirement extenseurs poignets", "d": 90, "img": "hand" },
+        { "name": "Torsion avant-bras G (Sol)", "d": 90, "img": "rotate-ccw" },
+        { "name": "Torsion avant-bras D (Sol)", "d": 90, "img": "rotate-ccw" },
+
+        // --- Chaîne Antérieure & Psoas (9 min / 540s) ---
+        { "name": "Fente basse - Psoas G (Basique)", "d": 90, "img": "arrow-up-right" },
+        { "name": "Fente basse - Psoas G (Bras levé)", "d": 90, "img": "arrow-up-right" },
+        { "name": "Fente basse - Psoas D (Basique)", "d": 90, "img": "arrow-up-right" },
+        { "name": "Fente basse - Psoas D (Bras levé)", "d": 90, "img": "arrow-up-right" },
+        { "name": "Étirement Quadriceps (G)", "d": 90, "img": "zap" },
+        { "name": "Étirement Quadriceps (D)", "d": 90, "img": "zap" },
+
+        // --- Fessiers & Adducteurs (12 min / 720s) ---
+        { "name": "Pigeon - Fessier G (Actif)", "d": 90, "img": "pigeon" },
+        { "name": "Pigeon - Fessier G (Relâché)", "d": 90, "img": "pigeon" },
+        { "name": "Pigeon - Fessier D (Actif)", "d": 90, "img": "pigeon" },
+        { "name": "Pigeon - Fessier D (Relâché)", "d": 90, "img": "pigeon" },
+        { "name": "Grenouille - Phase 1", "d": 90, "img": "layout-grid" },
+        { "name": "Grenouille - Phase 2 (Profond)", "d": 90, "img": "layout-grid" },
+        { "name": "Papillon (Dos droit)", "d": 90, "img": "unfold-more" },
+        { "name": "Papillon (Relâché)", "d": 90, "img": "unfold-more" },
+
+        // --- Chaîne Postérieure (6 min / 360s) ---
+        { "name": "Pince assise (Respiration)", "d": 90, "img": "arrow-down" },
+        { "name": "Pince assise (Approfondissement)", "d": 90, "img": "arrow-down" },
+        { "name": "Écart facial assis (Statique)", "d": 90, "img": "columns" },
+        { "name": "Écart facial (Inclinaison latérale)", "d": 90, "img": "columns" },
+
+        // --- Relaxation Finale (6.5 min / 410s) ---
+        { "name": "Torsion colonne G", "d": 80, "img": "repeat" },
+        { "name": "Torsion colonne D", "d": 80, "img": "repeat" },
+        { "name": "Bébé heureux", "d": 80, "img": "smile" },
+        { "name": "Jambes au mur (Calme)", "d": 85, "img": "wall" },
+        { "name": "Jambes au mur (Méditation)", "d": 85, "img": "wall" }
     ]},
+// 33 min manque des min
+    "Souplesse Spécial Grand Écart": { "type": "Mixte", "duration": 33, "exos": [
+        // --- Préparation & Ischios (6 min / 360s) ---
+        { "name": "Fente Flexion Ischio (G)", "d": 90, "img": "stretch-vertical" },
+        { "name": "Fente Flexion Ischio (D)", "d": 90, "img": "stretch-vertical" },
+        { "name": "Flexion avant debout", "d": 90, "img": "arrow-down" },
+        { "name": "Compression Core (Pike)", "d": 90, "img": "activity" },
 
-    "Souplesse Spécial Grand Écart": { "type": "Mixte", "duration": 35, "exos": [
-        { "name": "Fente Flexion Ischio", "d": 180, "img": "stretch-vertical" },
-        { "name": "Fente haute active", "d": 120, "img": "zap" },
-        { "name": "Écart facial au mur", "d": 300, "img": "columns" },
-        { "name": "Pancake stretch", "d": 300, "img": "layers" },
-        { "name": "Grand écart (essai G)", "d": 180, "img": "expand" },
-        { "name": "Grand écart (essai D)", "d": 180, "img": "expand" },
-        { "name": "Cossack Squat lesté", "d": 180, "img": "weight" },
-        { "name": "Posture de la demi-lune G", "d": 150, "img": "moon-star" },
-        { "name": "Posture de la demi-lune D", "d": 150, "img": "moon-star" },
-        { "name": "Compression Core (Pike)", "d": 120, "img": "activity" },
-        { "name": "Flexion avant debout", "d": 120, "img": "arrow-down" }
+        // --- Flexion de Hanche & Psoas (6 min / 360s) ---
+        { "name": "Fente haute active (G)", "d": 90, "img": "zap" },
+        { "name": "Fente haute active (D)", "d": 90, "img": "zap" },
+        { "name": "Posture de la demi-lune (G)", "d": 90, "img": "moon-star" },
+        { "name": "Posture de la demi-lune (D)", "d": 90, "img": "moon-star" },
+
+        // --- Latéral & Adducteurs (7.5 min / 450s) ---
+        { "name": "Cossack Squat contrôlé (G)", "d": 90, "img": "move-horizontal" },
+        { "name": "Cossack Squat contrôlé (D)", "d": 90, "img": "move-horizontal" },
+        { "name": "Cossack Squat lesté (Alterné)", "d": 90, "img": "weight" },
+        { "name": "Écart facial au mur (Partie 1)", "d": 90, "img": "columns" },
+        { "name": "Écart facial au mur (Partie 2)", "d": 90, "img": "columns" },
+
+        // --- Pancake & Ouverture (6 min / 360s) ---
+        { "name": "Pancake stretch (Actif)", "d": 90, "img": "layers" },
+        { "name": "Pancake stretch (Passif)", "d": 90, "img": "layers" },
+        { "name": "Étirement Adducteurs assis", "d": 90, "img": "layout-grid" },
+        { "name": "Rotation interne hanche", "d": 90, "img": "refresh-ccw" },
+
+        // --- Tentatives de Grand Écart (7.5 min / 450s) ---
+        { "name": "Grand écart (Prépa G)", "d": 90, "img": "expand" },
+        { "name": "Grand écart (Essai G)", "d": 90, "img": "expand" },
+        { "name": "Grand écart (Prépa D)", "d": 90, "img": "expand" },
+        { "name": "Grand écart (Essai D)", "d": 90, "img": "expand" },
+        { "name": "Prière en fente profonde", "d": 90, "img": "shield" }
     ]},
-
+// 15 min bon ratio
     "Grimpeur : Mobilité Active": { "type": "Actif", "duration": 15, "exos": [
         { "name": "Ouverture Épaules mur", "d": 120, "img": "shield" },
         { "name": "Hanches rotation interne", "d": 120, "img": "rotate-ccw" },
@@ -2402,7 +2472,7 @@ const STRETCH_DATA = {
         { "name": "Rotation scapulaire", "d": 120, "img": "refresh-cw" },
         { "name": "Lézard dynamique", "d": 150, "img": "zap" }
     ]},
-
+// 20 min un peu long les exos
     "Souplesse Jambes & Ischio": { "type": "Mixte", "duration": 20, "exos": [
         { "name": "Chien tête en bas dyn.", "d": 120, "img": "dog" },
         { "name": "Pince debout", "d": 120, "img": "arrow-down" },
@@ -2413,7 +2483,7 @@ const STRETCH_DATA = {
         { "name": "Fente latérale", "d": 150, "img": "move-horizontal" },
         { "name": "Pyramide pose", "d": 150, "img": "triangle" }
     ]},
-
+// 15 min
     "Haut du corps & Thorax": { "type": "Passif", "duration": 15, "exos": [
         { "name": "Pectoraux encadrement G", "d": 120, "img": "door" },
         { "name": "Pectoraux encadrement D", "d": 120, "img": "door" },
@@ -2423,7 +2493,7 @@ const STRETCH_DATA = {
         { "name": "Rotation thoracique", "d": 90, "img": "refresh-cw" },
         { "name": "Étirement Avant-bras", "d": 90, "img": "hand" }
     ]},
-
+// 18 min 
     "Mobilité Colonne & Torsion": { "type": "Mixte", "duration": 18, "exos": [
         { "name": "Thread the needle G", "d": 120, "img": "needle" },
         { "name": "Thread the needle D", "d": 120, "img": "needle" },
@@ -2433,7 +2503,7 @@ const STRETCH_DATA = {
         { "name": "Posture de la sauterelle", "d": 150, "img": "zap" },
         { "name": "Roulement colonne", "d": 150, "img": "refresh-cw" }
     ]},
-
+// 20 min
     "Détente Soir (Sommeil)": { "type": "Passif", "duration": 20, "exos": [
         { "name": "Jambes contre le mur", "d": 240, "img": "wall" },
         { "name": "Bébé heureux", "d": 180, "img": "smile" },
@@ -2442,21 +2512,21 @@ const STRETCH_DATA = {
         { "name": "Papillon allongé", "d": 180, "img": "heart" },
         { "name": "Torsion couchée douce", "d": 180, "img": "repeat" }
     ]},
-
+//4min parfait
     "Déblocage Avant-bras": { "type": "Actif", "duration": 4, "exos": [
         { "name": "Extension poignets", "d": 60, "img": "hand" },
         { "name": "Flexion poignets", "d": 60, "img": "hand" },
         { "name": "Cercle poignets", "d": 60, "img": "refresh-cw" },
         { "name": "Shake (Secouer)", "d": 60, "img": "wind" }
     ]},
-
+// 5 min
     "Anti-Bureau (Nuque)": { "type": "Mixte", "duration": 5, "exos": [
         { "name": "Rétraction cervicale", "d": 60, "img": "user" },
         { "name": "Ouverture pectoraux", "d": 90, "img": "door" },
         { "name": "Trapèzes latéraux", "d": 90, "img": "align-center" },
         { "name": "Y-W raises", "d": 60, "img": "expand" }
     ]},
-
+// 3 min
     "Flash Hanche (Squat)": { "type": "Actif", "duration": 3, "exos": [
         { "name": "Squat profond actif", "d": 120, "img": "arrow-down" },
         { "name": "Rotations hanches déb.", "d": 60, "img": "refresh-cw" }
@@ -2469,45 +2539,162 @@ const STRETCH_DATA = {
     ]},
 
     "Ouverture Thoracique Forte": { "type": "Actif", "duration": 12, "exos": [
-        { "name": "Planche inversée", "d": 120, "img": "arrow-up" },
-        { "name": "Pompes Hindu", "d": 180, "img": "activity" },
-        { "name": "Cobra actif", "d": 210, "img": "zap" },
-        { "name": "Arc (Bow pose)", "d": 210, "img": "target" }
+        { "name": "Planche inversée", "d": 90, "img": "arrow-up" },
+        { "name": "Pompes Hindu", "d": 90, "img": "activity" },
+        { "name": "Cobra actif", "d": 90, "img": "zap" },
+        { "name": "Arc (Bow pose)", "d": 90, "img": "target" },
+        { "name": "Posture du chiot (Puppy)", "d": 90, "img": "dog" },
+        { "name": "Rotation thoracique (G)", "d": 90, "img": "rotate-cw" },
+        { "name": "Rotation thoracique (D)", "d": 90, "img": "rotate-cw" },
+        { "name": "Ouverture pectoraux mur", "d": 90, "img": "door-open" }
     ]},
-
+// 14 min : pas assez d'exos
     "Adducteurs & Squat": { "type": "Passif", "duration": 14, "exos": [
-        { "name": "Grenouille légère", "d": 300, "img": "layout-grid" },
-        { "name": "Étirement latéral sol", "d": 270, "img": "move-horizontal" },
-        { "name": "Pancake léger", "d": 270, "img": "layers" }
+        { "name": "Grenouille légère", "d": 90, "img": "layout-grid" },
+        { "name": "Étirement latéral sol (G)", "d": 90, "img": "move-horizontal" },
+        { "name": "Étirement latéral sol (D)", "d": 90, "img": "move-horizontal" },
+        { "name": "Pancake léger", "d": 90, "img": "layers" },
+        { "name": "Squat profond passif", "d": 90, "img": "arrow-down" },
+        { "name": "Posture du Papillon", "d": 90, "img": "smile" },
+        { "name": "Fente latérale (G)", "d": 75, "img": "chevron-left" },
+        { "name": "Fente latérale (D)", "d": 75, "img": "chevron-right" },
+        { "name": "Cossack squat passif", "d": 75, "img": "move-horizontal" },
+        { "name": "Mobilité hanches 90/90", "d": 75, "img": "refresh-ccw" }
     ]},
-
+// 16 min pas assez d'exos
     "Spécial Dos (Bas du dos)": { "type": "Passif", "duration": 16, "exos": [
-        { "name": "Genoux poitrine", "d": 240, "img": "circle" },
-        { "name": "Posture de l'enfant", "d": 240, "img": "baby" },
-        { "name": "Torsion douce", "d": 240, "img": "repeat" },
-        { "name": "Sphinx", "d": 240, "img": "eye" }
+        { "name": "Genoux poitrine", "d": 80, "img": "circle" },
+        { "name": "Posture de l'enfant", "d": 80, "img": "baby" },
+        { "name": "Torsion douce (G)", "d": 80, "img": "repeat" },
+        { "name": "Torsion douce (D)", "d": 80, "img": "repeat" },
+        { "name": "Sphinx", "d": 80, "img": "eye" },
+        { "name": "Posture du Chat-Vache", "d": 80, "img": "refresh-cw" },
+        { "name": "Étirement Carré des lombes (G)", "d": 80, "img": "align-left" },
+        { "name": "Étirement Carré des lombes (D)", "d": 80, "img": "align-right" },
+        { "name": "Chien tête en bas", "d": 80, "img": "chevron-up" },
+        { "name": "Pliage avant assis", "d": 80, "img": "arrow-down-circle" },
+        { "name": "Posture du Pigeon (G)", "d": 80, "img": "accessibility" },
+        { "name": "Posture du Pigeon (D)", "d": 80, "img": "accessibility" }
     ]},
-
+// 22 min pas assez d'exos
     "Yoga Power (Vinyasa simple)": { "type": "Actif", "duration": 22, "exos": [
-        { "name": "Salutation soleil A", "d": 300, "img": "sun" },
-        { "name": "Guerrier 1 & 2", "d": 300, "img": "sword" },
-        { "name": "Planche active", "d": 240, "img": "shield" },
-        { "name": "Triangle pose", "d": 240, "img": "triangle" },
-        { "name": "Vinyasa flow", "d": 240, "img": "activity" }
+        { "name": "Salutation soleil A", "d": 90, "img": "sun" },
+        { "name": "Guerrier 1 (G)", "d": 90, "img": "sword" },
+        { "name": "Guerrier 1 (D)", "d": 90, "img": "sword" },
+        { "name": "Guerrier 2 (G)", "d": 90, "img": "sword" },
+        { "name": "Guerrier 2 (D)", "d": 90, "img": "sword" },
+        { "name": "Planche active", "d": 90, "img": "shield" },
+        { "name": "Triangle pose (G)", "d": 90, "img": "triangle" },
+        { "name": "Triangle pose (D)", "d": 90, "img": "triangle" },
+        { "name": "Vinyasa flow lent", "d": 90, "img": "activity" },
+        { "name": "Posture de la chaise", "d": 90, "img": "armchair" },
+        { "name": "Équilibre sur une jambe (G)", "d": 75, "img": "user" },
+        { "name": "Équilibre sur une jambe (D)", "d": 75, "img": "user" },
+        { "name": "Posture de la fente basse", "d": 90, "img": "zap" },
+        { "name": "Chien tête en haut", "d": 90, "img": "arrow-up-right" },
+        { "name": "Plan incliné", "d": 90, "img": "trending-up" }
     ]},
-
+// 12 min pas assez d'exos
     "Soulagement Lombaire": { "type": "Passif", "duration": 12, "exos": [
-        { "name": "Sphinx", "d": 240, "img": "eye" },
-        { "name": "Torsion au sol", "d": 240, "img": "repeat" },
-        { "name": "Posture de l'enfant large", "d": 240, "img": "baby" }
+        { "name": "Sphinx", "d": 90, "img": "eye" },
+        { "name": "Torsion au sol (G)", "d": 90, "img": "repeat" },
+        { "name": "Torsion au sol (D)", "d": 90, "img": "repeat" },
+        { "name": "Posture de l'enfant large", "d": 90, "img": "baby" },
+        { "name": "Pont fessier passif", "d": 90, "img": "bridge" },
+        { "name": "Jambes contre le mur", "d": 90, "img": "align-vertical-bottom" },
+        { "name": "Étirement Psoas (G)", "d": 90, "img": "zap" },
+        { "name": "Étirement Psoas (D)", "d": 90, "img": "zap" }
     ]},
-
+// 8 min pas assez d'exos
     "Mobilité Poignets Pro": { "type": "Actif", "duration": 8, "exos": [
-        { "name": "Cercle poignets sol", "d": 180, "img": "refresh-cw" },
-        { "name": "Étirement doigts", "d": 150, "img": "hand" },
-        { "name": "Pompes sur poignets", "d": 150, "img": "zap" }
-    ]}
+        { "name": "Cercle poignets sol", "d": 80, "img": "refresh-cw" },
+        { "name": "Étirement doigts (extension)", "d": 80, "img": "hand" },
+        { "name": "Étirement doigts (flexion)", "d": 80, "img": "hand" },
+        { "name": "Pompes sur poignets", "d": 80, "img": "zap" },
+        { "name": "Extension poignet assis (G)", "d": 80, "img": "chevron-up" },
+        { "name": "Extension poignet assis (D)", "d": 80, "img": "chevron-up" }
+    ]},
+    "Ultimate Full Body": {
+        "type": "Passif / Profond",
+        "duration_total_min": 90,
+        "exos": [
+        // --- Mobilité Cervicale & Nuque (4.5 min) ---
+        { "name": "Inclinaison latérale nuque G", "d": 90, "img": "user" },
+        { "name": "Inclinaison latérale nuque D", "d": 90, "img": "user" },
+        { "name": "Menton-Poitrine (Légère pression)", "d": 90, "img": "arrow-down" },
+
+        // --- Ouverture Épaules & Haut du Dos (12 min) ---
+        { "name": "Posture de l'enfant (Respiration)", "d": 90, "img": "baby" },
+        { "name": "Posture de l'enfant (Bras G)", "d": 90, "img": "chevron-left" },
+        { "name": "Posture de l'enfant (Bras D)", "d": 90, "img": "chevron-right" },
+        { "name": "Fil de l'aiguille (Épaule G au sol)", "d": 90, "img": "align-center" },
+        { "name": "Fil de l'aiguille (Épaule D au sol)", "d": 90, "img": "align-center" },
+        { "name": "Posture du chiot (Poitrine au sol)", "d": 90, "img": "dog" },
+        { "name": "Étirement Pectoral au sol (Bras G)", "d": 90, "img": "expand" },
+        { "name": "Étirement Pectoral au sol (Bras D)", "d": 90, "img": "expand" },
+
+        // --- Colonne & Lombaire (9 min) ---
+        { "name": "Cat-Cow (Lent et fluide)", "d": 90, "img": "refresh-cw" },
+        { "name": "Chien tête en bas (Pédalage)", "d": 90, "img": "dog" },
+        { "name": "Chien tête en bas (Statique)", "d": 90, "img": "dog" },
+        { "name": "Cobra (Bas sur avant-bras)", "d": 90, "img": "snake" },
+        { "name": "Sphinx (Maintien passif)", "d": 90, "img": "snake" },
+        { "name": "Torsion assise douce G", "d": 90, "img": "rotate-ccw" },
+
+        // --- Poignets & Mains (6 min) ---
+        { "name": "Étirement fléchisseurs", "d": 90, "img": "hand" },
+        { "name": "Étirement extenseurs", "d": 90, "img": "hand" },
+        { "name": "Rotation poignets (Mobilité douce)", "d": 90, "img": "rotate-cw" },
+        { "name": "Étirement pouces et paumes", "d": 90, "img": "hand" },
+
+        // --- Hanches & Psoas - Travail Profond (15 min) ---
+        { "name": "Fente basse G (Hanches basses)", "d": 90, "img": "arrow-up-right" },
+        { "name": "Fente basse G (Ouverture genou ext.)", "d": 90, "img": "external-link" },
+        { "name": "Fente basse D (Hanches basses)", "d": 90, "img": "arrow-up-right" },
+        { "name": "Fente basse D (Ouverture genou ext.)", "d": 90, "img": "external-link" },
+        { "name": "Lézard G (Avant-bras au sol)", "d": 90, "img": "target" },
+        { "name": "Lézard D (Avant-bras au sol)", "d": 90, "img": "target" },
+        { "name": "Couché sur le dos - Genou poitrine G", "d": 90, "img": "arrow-down-left" },
+        { "name": "Couché sur le dos - Genou poitrine D", "d": 90, "img": "arrow-down-right" },
+        { "name": "Étirement Quadriceps G (Couché côté)", "d": 90, "img": "zap" },
+        { "name": "Étirement Quadriceps D (Couché côté)", "d": 90, "img": "zap" },
+
+        // --- Fessiers & Bassin (15 min) ---
+        { "name": "Pigeon G (Buste droit)", "d": 90, "img": "pigeon" },
+        { "name": "Pigeon G (Relâché devant)", "d": 90, "img": "pigeon" },
+        { "name": "Pigeon D (Buste droit)", "d": 90, "img": "pigeon" },
+        { "name": "Pigeon D (Relâché devant)", "d": 90, "img": "pigeon" },
+        { "name": "90/90 Hanches (Rotation interne G)", "d": 90, "img": "corner-down-left" },
+        { "name": "90/90 Hanches (Rotation interne D)", "d": 90, "img": "corner-down-right" },
+        { "name": "Grenouille (Phase statique)", "d": 90, "img": "layout-grid" },
+        { "name": "Papillon (Dos droit)", "d": 90, "img": "unfold-more" },
+        { "name": "Papillon (Buste vers l'avant)", "d": 90, "img": "unfold-more" },
+        { "name": "Squat profond (Malasana)", "d": 90, "img": "arrow-down" },
+
+        // --- Ischios & Mollets (12 min) ---
+        { "name": "Demi-grand écart G (Ischios)", "d": 90, "img": "minimize-2" },
+        { "name": "Demi-grand écart D (Ischios)", "d": 90, "img": "minimize-2" },
+        { "name": "Pince assise (Jambes serrées)", "d": 90, "img": "arrow-down" },
+        { "name": "Écart facial (Statique milieu)", "d": 90, "img": "columns" },
+        { "name": "Écart facial (Vers jambe G)", "d": 90, "img": "corner-left-down" },
+        { "name": "Écart facial (Vers jambe D)", "d": 90, "img": "corner-right-down" },
+        { "name": "Étirement Mollets contre mur G", "d": 90, "img": "trending-up" },
+        { "name": "Étirement Mollets contre mur D", "d": 90, "img": "trending-up" },
+
+        // --- Pieds & Chevilles (6 min) ---
+        { "name": "Posture de l'orteil (Assis sur talons)", "d": 90, "img": "hash" },
+        { "name": "Étirement coup de pied (Cheville)", "d": 90, "img": "activity" },
+        { "name": "Rotation chevilles lente G/D", "d": 180, "img": "rotate-cw" },
+
+        // --- Relaxation & Intégration (10.5 min) ---
+        { "name": "Torsion colonne couché G", "d": 90, "img": "repeat" },
+        { "name": "Torsion colonne couché D", "d": 90, "img": "repeat" },
+        { "name": "Bébé heureux", "d": 90, "img": "smile" },
+        { "name": "Jambes au mur (Viparita Karani)", "d": 180, "img": "wall" },
+        { "name": "Savasana (Repos total)", "d": 180, "img": "moon" }
+        ]}
 }
+
 
 
 
