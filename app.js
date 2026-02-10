@@ -2616,7 +2616,7 @@ const STRETCH_DATA = {
     ]},
     "Ultimate Full Body": {
         "type": "Passif / Profond",
-        "duration_total_min": 90,
+        "duration": 90,
         "exos": [
         // --- Mobilité Cervicale & Nuque (4.5 min) ---
         { "name": "Inclinaison latérale nuque G", "d": 90, "img": "user" },
@@ -2711,7 +2711,7 @@ function loadStretchMenu() {
     const menu = document.getElementById('stretch-menu');
     menu.innerHTML = Object.keys(STRETCH_DATA).map(key => {
         const prog = STRETCH_DATA[key];
-        const typeColor = prog.type === 'Actif' ? 'text-orange-400' : (prog.type === 'Passif' ? 'text-blue-400' : 'text-emerald-400');
+        const typeColor = prog.type === 'Actif' ? 'text-orange-400' : (prog.type === 'Passif' ? 'text-blue-400' : (prog.type === 'Passif / Profond' ? 'text-violet-400' : 'text-emerald-400'));
         
         return `
             <button onclick="startStretchRoutine('${key}')" class="glass p-4 rounded-2xl border-l-4 border-emerald-500/30 flex justify-between items-center active:scale-95 transition-all">
