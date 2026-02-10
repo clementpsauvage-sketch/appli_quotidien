@@ -1677,7 +1677,7 @@ function renderProgressionChart(data) {
     // --- CORRECTION ICI : On inverse l'ordre des données avant le rendu ---
     // [...data] crée une copie pour ne pas impacter le reste de l'application
     // .reverse() remet le plus ancien à gauche (index 0)
-    const displayData = [...data].reverse();
+    const displayData = [...data] ;
 
     window.mystatsChart = new Chart(ctx, {
         type: 'line',
