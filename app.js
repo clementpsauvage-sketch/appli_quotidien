@@ -114,13 +114,28 @@ function loadExercise(type) {
     document.getElementById('exercise-active').classList.remove('hidden');
     const container = document.getElementById('exercise-content');
 
-    if (type === 'deadhang' || type === 'arms90') {
+    if (type === 'deadhang' || type === 'arms90' || type === 'tractions') {
         const isArms90 = type === 'arms90';
+        const isTractions = type === 'tractions';
         container.innerHTML = `
             <div class="glass p-6 rounded-3xl border border-violet-500/20 text-center">
-                <h3 class="font-bold text-xl mb-4 text-violet-400">${isArms90 ? 'Bras Bloqués' : 'Suspension'}</h3>
+                <h3 class="font-bold text-xl mb-4 text-violet-400">
+                    ${isTractions ? 'Tractions' : (isArms90 ? 'Bras Bloqués' : 'Suspension')}
+                </h3>
                 <div class="grid grid-cols-2 gap-3 mb-6 text-left">
-                    ${isArms90 ? `
+                    ${isTractions ? `
+                        <div class="col-span-2">
+                            <label class="text-[10px] text-slate-500 uppercase ml-1">Variante</label>
+                            <select id="traction-variant" class="w-full bg-slate-800 p-2 rounded-xl text-xs mt-1 outline-none">
+                                <option value="Strictes">Strictes</option>
+                                <option value="Négatives">Négatives</option>
+                            </select>
+                        </div>
+                        <div class="col-span-2">
+                            <label class="text-[10px] text-slate-500 uppercase ml-1">Répétitions par cycle</label>
+                            <input type="number" id="input-reps-per-cycle" value="5" class="w-full bg-slate-800 p-2 rounded-xl text-xs mt-1 outline-none">
+                        </div>
+                    `: isArms90 ? `
                         <div class="col-span-1">
                             <label class="text-[10px] text-slate-500 uppercase ml-1">Angle</label>
                             <select id="hang-angle" class="w-full bg-slate-800 p-2 rounded-xl text-xs mt-1 outline-none">
@@ -182,6 +197,12 @@ function loadExercise(type) {
                 <h3 class="font-bold text-xl mb-4 text-violet-400">Mode Pyramide</h3>
                 <input type="number" id="pyramid-max" placeholder="Sommet (ex: 5)" 
                         class="w-full bg-slate-800 p-4 rounded-2xl mb-4 text-center text-xl outline-none">
+                
+                <div class="flex items-center justify-between bg-slate-800/50 p-4 rounded-2xl mb-6">
+                    <span class="text-sm text-slate-300">Montée uniquement (1 → Max)</span>
+                    <input type="checkbox" id="pyramid-up-only" class="w-6 h-6 accent-violet-500">
+                </div>
+
                 <button onclick="startPyramid()" class="w-full bg-violet-600 p-4 rounded-2xl font-bold">LANCER</button>
             </div>
         `;
@@ -189,11 +210,17 @@ function loadExercise(type) {
     lucide.createIcons();
 }
 
+
 function startComplexCycle(type) {
     const isArms90 = type === 'arms90';
+    const isTractions = type === 'tractions';
     const work = parseInt(document.getElementById('input-work').value);
     const rest = parseInt(document.getElementById('input-rest').value);
     const cycles = parseInt(document.getElementById('input-cycles').value);
+    
+    // 1. Récupérer les répétitions par cycle (uniquement pour les tractions)
+    const repsPerCycle = isTractions ? parseInt(document.getElementById('input-reps-per-cycle').value) : 1;
+
     const btn = document.getElementById('btn-start');
     const status = document.getElementById('timer-status');
     const display = document.getElementById('main-timer');
@@ -223,29 +250,44 @@ function startComplexCycle(type) {
                 if (currentCycle > cycles) {
                     clearInterval(interval);
                     beep(880, 500);
+                    
+                    // 2. Calculer le volume total (Séries x Reps)
+                    const totalReps = isTractions ? (cycles * repsPerCycle) : cycles;
+
                     const sessionData = {
-                        type: isArms90 ? 'Bras 90°' : 'Suspension',
-                        work, rest, cycles,
-                        // On génère la note demandée : "Cycles x Travail s (Repos: Repos s)"
-                        note: `${cycles} x ${work}s (Repos: ${rest}s)`,
+                        type: isTractions ? 'Tractions' : (isArms90 ? 'Bras 90°' : 'Suspension'),
+                        work, 
+                        rest, 
+                        cycles,
+                        repsPerCycle: isTractions ? repsPerCycle : null, // Stockage pour l'historique
+                        avgWorkPerRep : isTractions? work*cycles/totalReps : null,
+                        avgRestPerRep : isTractions? rest*cycles/totalReps : null,
+
+                        totalReps: totalReps, // Donnée clé pour renderVolumeChart
+                        
+                        // Note formatée selon l'exercice
+                        note: isTractions ? 
+                                `${cycles} x ${repsPerCycle} reps (${work}s / Repos: ${rest}s)` : 
+                                `${cycles} x ${work}s (Repos: ${rest}s)`,
+                        
+                        variant: isTractions ? document.getElementById('traction-variant').value : null,
                         angle: isArms90 ? document.getElementById('hang-angle').value : null,
                         side: isArms90 ? document.getElementById('hang-side').value : null,
-                        fingers: !isArms90 ? document.getElementById('hang-fingers').value : null,
-                        hands: !isArms90 ? document.getElementById('hang-hands').value : null,
-        
+                        fingers: (!isArms90 && !isTractions) ? document.getElementById('hang-fingers').value : null,
+                        hands: (!isArms90 && !isTractions) ? document.getElementById('hang-hands').value : null,
                     };
+                    
                     showMoodSelector(sessionData);
                     return;
                 }
                 isWorking = true;
                 timeLeft = work;
-                status.innerText = isArms90 ? "BLOCAGE" : "SUSPENSION";
+                status.innerText = isTractions ? "EFFORT" : (isArms90 ? "BLOCAGE" : "SUSPENSION");
                 status.className = "text-violet-400 uppercase tracking-widest text-sm font-bold font-mono";
             }
         }
     }, 1000);
 }
-
 // --- UTILITAIRES PYRAMIDE ---
 
 
@@ -265,7 +307,7 @@ let pyrData = { steps: [], phase: 'repos' };
 let chronoInterval;
 let seconds = 0;
 let pyrMax, pyrCurrent, pyrDirection;
-
+let isUpOnly; // Ajout de isUpOnly ici
 
 
 
@@ -280,10 +322,15 @@ function backToMenu() {
 function startPyramid() {
     const max = document.getElementById('pyramid-max').value;
     if (!max) return;
+    
+    // On vérifie si la case est cochée
+    isUpOnly = document.getElementById('pyramid-up-only').checked; 
+    
     pyrMax = parseInt(max);
     pyrCurrent = 1;
     pyrDirection = 1;
     pyrData.steps = [];
+    currentSessionSteps = []; // On vide aussi la session précédente
     
     renderPyramidUI();
     startChrono();
@@ -293,7 +340,8 @@ function renderPyramidUI() {
     const container = document.getElementById('exercise-content');
     container.innerHTML = `
         <div class="glass p-6 rounded-3xl text-center">
-            <h3 class="font-bold text-xl mb-4 text-violet-400">Pyramide Pro</h3>
+            <h3 class="font-bold text-xl mb-1 text-violet-400">Pyramide Pro</h3>
+            ${isUpOnly ? '<span class="bg-orange-500/20 text-orange-400 text-[10px] px-2 py-0.5 rounded-full border border-orange-500/30 mb-4 inline-block font-bold">SEMI-PYRAMIDE</span>' : ''}
             <div class="text-7xl font-bold text-white mb-2" id="pyr-reps">${pyrCurrent}</div>
             <p id="pyr-phase" class="text-blue-400 uppercase text-xs font-bold mb-6">REPOS</p>
             <div id="pyr-timer" class="text-5xl font-mono mb-8 text-slate-300">00:00</div>
@@ -350,23 +398,33 @@ function startEffort() {
 let currentSessionSteps = []; 
 
 function finishSet() {
-    // On enregistre les données réelles de la série qui vient de finir
     currentSessionSteps.push({
         reps: pyrCurrent,
-        work: seconds,      // Temps d'effort chronométré
-        rest: pyrData.currentRest // Temps de repos juste avant cette série
+        work: seconds,
+        rest: pyrData.currentRest
     });
 
-    // Logique de progression de la pyramide (Montée/Descente)
-    if (pyrCurrent === pyrMax) pyrDirection = -1;
-    pyrCurrent += pyrDirection;
+    // --- NOUVELLE LOGIQUE ---
+    if (pyrCurrent === pyrMax) {
+        if (isUpOnly) {
+            // Si on ne fait que la montée, on s'arrête direct au sommet
+            pyrCurrent = 0; 
+        } else {
+            // Sinon, on entame la descente
+            pyrDirection = -1;
+            pyrCurrent += pyrDirection;
+        }
+    } else {
+        pyrCurrent += pyrDirection;
+    }
+    // ------------------------
 
-    if (pyrCurrent === 0) {
+    if (pyrCurrent <= 0) { // On met <= 0 par sécurité
         clearInterval(chronoInterval);
         savePyramidFinal();
     } else {
         renderPyramidUI();
-        startChrono(); // Relance pour le repos suivant
+        startChrono();
     }
 }
 
@@ -381,6 +439,7 @@ function savePyramidFinal() {
         avgWorkPerRep: (totalWork / totalReps).toFixed(1), // Temps moyen par traction
         avgRestPerRep: (totalRest / totalReps).toFixed(1), // Repos moyen par traction
         steps: currentSessionSteps, // Le détail complet pour les calculs futurs
+        isSemi: isUpOnly,
         note: `Sommet ${pyrMax} | ${totalReps} reps | Cadence: ${(totalWork / totalReps).toFixed(1)}s/rep`
     };
 
@@ -460,6 +519,14 @@ function finalSave(jsonStr, moodScore) {
 // --- MOTEUR 1 : MUSCU & SUSPENSION (Ton code qui fonctionne) ---
 function renderMuscuDetails(log) {
     return `
+        ${log.variant ? `
+            <div class="flex gap-2 mb-3">
+                <span class="bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded text-[9px] uppercase font-bold border border-emerald-500/30">
+                    ${log.variant}
+                </span>
+            </div>
+        ` : ''}
+
         ${log.angle || log.side ? `
             <div class="flex gap-2 mb-3">
                 ${log.side ? `<span class="bg-violet-500/20 text-violet-300 px-2 py-0.5 rounded text-[9px] uppercase font-bold border border-violet-500/30">${log.side}</span>` : ''}
@@ -471,6 +538,14 @@ function renderMuscuDetails(log) {
                 ${log.fingers ? `<span class="bg-blue-500/20 text-blue-300 px-2 py-0.5 rounded text-[9px] uppercase font-bold border border-blue-500/30">${log.fingers} Doigt(s)</span>` : ''}
             </div>
         ` : '')}
+
+        ${log.isSemi ? `
+            <div class="flex mb-3">
+                <span class="bg-orange-500/20 text-orange-400 px-2 py-0.5 rounded text-[9px] uppercase font-bold border border-orange-500/30">
+                    ▲ Semi-Pyramide
+                </span>
+            </div>
+        ` : ''}
 
         ${log.totalReps ? `
             <div class="grid grid-cols-2 gap-2 mb-3">
@@ -490,7 +565,7 @@ function renderMuscuDetails(log) {
                     <p class="text-xs font-bold text-white">${log.cycles || '-'}</p>
                 </div>
                 <div class="bg-violet-500/10 p-2 rounded-xl border border-violet-500/20 text-center">
-                    <p class="text-[9px] text-slate-500 uppercase">Maintien</p>
+                    <p class="text-[9px] text-slate-500 uppercase">Travail</p>
                     <p class="text-xs font-bold text-violet-400">${log.work || '-'}s</p>
                 </div>
                 <div class="bg-blue-500/10 p-2 rounded-xl border border-blue-500/20 text-center">
@@ -855,20 +930,32 @@ async function updateStatsDashboard() {
     }
 
     // --- 1. STATS PYRAMIDE ---
-    const pyramidLogs = logs.filter(l => l.type && l.type.includes('Pyramide'));
-    if (pyramidLogs.length > 0) {
-        const totalReps = pyramidLogs.reduce((acc, l) => acc + (parseInt(l.totalReps) || 0), 0);
-        const logsWithSpeed = pyramidLogs.filter(l => l.avgWorkPerRep);
+    // --- 1. STATS TRACTIONS CUMULÉES (Pyramide + Cycles) ---
+    const tractionLogs = logs.filter(l => l.type && (l.type.includes('Pyramide') || l.type === 'Tractions'));
+
+    if (tractionLogs.length > 0) {
+        // On additionne le totalReps (calculé automatiquement dans les deux modes maintenant)
+        const totalReps = tractionLogs.reduce((acc, l) => acc + (parseInt(l.totalReps) || 0), 0);
+        
+        // Pour la vitesse moyenne, on ne garde que les sessions qui ont l'info (souvent les pyramides)
+        const logsWithSpeed = tractionLogs.filter(l => l.avgWorkPerRep);
         const avgSpeed = logsWithSpeed.length > 0 
             ? logsWithSpeed.reduce((acc, l) => acc + parseFloat(l.avgWorkPerRep), 0) / logsWithSpeed.length 
             : 0;
 
-        if(document.getElementById('stat-total-reps')) document.getElementById('stat-total-reps').innerText = totalReps;
-        if(document.getElementById('stat-avg-speed')) document.getElementById('stat-avg-speed').innerText = avgSpeed.toFixed(1) + "s";
+        // Mise à jour de l'affichage du compteur total
+        if(document.getElementById('stat-total-reps')) {
+            document.getElementById('stat-total-reps').innerText = totalReps;
+        }
+
+        // Mise à jour de la vitesse moyenne (si applicable)
+        if(document.getElementById('stat-avg-speed') && avgSpeed > 0) {
+            document.getElementById('stat-avg-speed').innerText = avgSpeed.toFixed(1) + "s";
+        }
         
-        // On envoie les 10 derniers à ton graphique
+        // Mise à jour du graphique de progression (les 10 dernières séances de tractions, tout type confondu)
         if (typeof renderProgressionChart === "function") {
-            renderProgressionChart(pyramidLogs.slice(0, 10).reverse());
+            renderProgressionChart(tractionLogs.slice(-10)); 
         }
     }
 
@@ -1207,14 +1294,18 @@ function renderRadarChart(logs,objectifs) {
             const type = l.type;
             let mins = 0;
 
-            // MUSCULATION (Déjà en secondes -> Minutes)
+            // --- SECTION MUSCULATION MODIFIÉE ---
             if (label === 'Musculation') {
-                if (type === "Bras 90°" || type === "Suspension") {
-                    mins = ((parseInt(l.work)||0) + (parseInt(l.rest)||0)) * (parseInt(l.cycles)||1) / 60;
-                } else if (type === "Pyramide Tractions") {
-                    mins = (parseInt(l.totalReps)||0) * (parseFloat(l.avgWorkPerRep)||0) / 60;
+                // Mode Chrono : Bras 90, Suspensions ET Tractions
+                if (type === "Bras 90°" || type === "Suspension" || type === "Tractions") {
+                    mins = ((parseInt(l.work) || 0) + (parseInt(l.rest) || 0)) * (parseInt(l.cycles) || 1) / 60;
+                } 
+                // Mode Pyramide
+                else if (type === "Pyramide Tractions") {
+                    mins = (parseInt(l.totalReps) || 0) * (parseFloat(l.avgWorkPerRep) || 0) / 60;
                 }
             }
+            // --- FIN SECTION MUSCULATION ---
             // COURSE (Format 00:00:00 -> H:M:S)
             else if (label === 'Course' && type === "Course") {
                 if (l.duration && typeof l.duration === 'string' && l.duration.includes(':')) {
@@ -1707,7 +1798,7 @@ function renderProgressionChart(data) {
     // --- CORRECTION ICI : On inverse l'ordre des données avant le rendu ---
     // [...data] crée une copie pour ne pas impacter le reste de l'application
     // .reverse() remet le plus ancien à gauche (index 0)
-    const displayData = [...data] ;
+    const displayData = [...data].reverse() ;
 
     window.mystatsChart = new Chart(ctx, {
         type: 'line',
@@ -1769,7 +1860,13 @@ function renderVolumeChart(logs) {
                 if (logDate !== date) return false;
 
                 if (category === 'Musculation') {
-                    return (l.type === 'Pyramide Tractions' || l.type === 'Bras 90°' || l.type === 'Suspension');
+                    // AJOUT : On inclut "Tractions" et tout type contenant "Tractions" (pour les pyramides)
+                    return (
+                        l.type === 'Bras 90°' || 
+                        l.type === 'Suspension' || 
+                        l.type === 'Tractions' || 
+                        (l.type && l.type.includes('Tractions'))
+                    );
                 }
                 if (category === 'Escalade') {
                     return l.type === 'Escalade' || l.type === 'escalade';
@@ -3146,7 +3243,7 @@ function calculateBest(logs, goal) {
         let val = 0;
         if (goal.unit === "km") val = parseFloat(l.distance) || 0;
         else if (goal.fingers) val = (l.fingers == goal.fingers) ? (parseInt(l.work) || 0) : 0;
-        else if (goal.unit === "sommet") val = parseInt(l.note?.match(/Sommet (\d+)/)?.[1]) || 0;
+        else if (goal.unit === "sommet") { if ( !l.isSemi) { val = parseInt(l.note?.match(/Sommet (\d+)/)?.[1]) || 0;}}
         
         // CORRECTION ICI : On compte le nombre de tops réussis de cette couleur dans la séance
         else if (goal.unit === "top" && goal.color) {
@@ -3167,7 +3264,7 @@ function calculateBest(logs, goal) {
 // 2. CORRECTION DES RECORDS (Ordre des couleurs)
 function renderPersonalRecords(logs) {
     const bestRun = logs.filter(l => l.type === 'Course').sort((a,b) => b.distance - a.distance)[0];
-    const bestPyr = logs.filter(l => l.type === 'Pyramide Tractions')
+    const bestPyr = logs.filter(l => l.type === 'Pyramide Tractions'&& !l.isSemi)
                         .sort((a,b) => (parseInt(b.note?.match(/Sommet (\d+)/)?.[1]) || 0) - (parseInt(a.note?.match(/Sommet (\d+)/)?.[1]) || 0))[0];
 
     // L'ordre doit être exact (minuscules)
