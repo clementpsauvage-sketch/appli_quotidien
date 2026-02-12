@@ -518,36 +518,40 @@ function finalSave(jsonStr, moodScore) {
 // --- JOURNAL (RENDER LOGS) ---
 // --- MOTEUR 1 : MUSCU & SUSPENSION (Ton code qui fonctionne) ---
 function renderMuscuDetails(log) {
-    return `
-        ${log.variant ? `
-            <div class="flex gap-2 mb-3">
-                <span class="bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded text-[9px] uppercase font-bold border border-emerald-500/30">
-                    ${log.variant}
-                </span>
-            </div>
-        ` : ''}
+    // 1. Tags de variantes
+    const variantTag = log.variant ? `
+        <span class="bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded text-[9px] uppercase font-bold border border-emerald-500/30">
+            ${log.variant}
+        </span>` : '';
 
-        ${log.angle || log.side ? `
+    const semiTag = log.isSemi ? `
+        <span class="bg-orange-500/20 text-orange-400 px-2 py-0.5 rounded text-[9px] uppercase font-bold border border-orange-500/30">
+            ▲ Semi-Pyramide
+        </span>` : '';
+
+    // 2. Détails techniques (Angle, Bras, Mains, Doigts)
+    let techHtml = '';
+    if (log.hands || log.fingers) {
+        techHtml = `
+            <div class="flex gap-2 mb-3">
+                <span class="bg-violet-500/20 text-violet-300 px-2 py-0.5 rounded text-[9px] uppercase font-bold border border-violet-500/30">${log.hands || 2} Main(s)</span>
+                ${log.fingers ? `<span class="bg-blue-500/20 text-blue-300 px-2 py-0.5 rounded text-[9px] uppercase font-bold border border-blue-500/30">${log.fingers} Doigt(s)</span>` : ''}
+            </div>`;
+    } else if (log.angle || log.side) {
+        techHtml = `
             <div class="flex gap-2 mb-3">
                 ${log.side ? `<span class="bg-violet-500/20 text-violet-300 px-2 py-0.5 rounded text-[9px] uppercase font-bold border border-violet-500/30">${log.side}</span>` : ''}
                 ${log.angle ? `<span class="bg-blue-500/20 text-blue-300 px-2 py-0.5 rounded text-[9px] uppercase font-bold border border-blue-500/30">Angle: ${log.angle}°</span>` : ''}
-            </div>
-        ` : (log.hands ? `
-            <div class="flex gap-2 mb-3">
-                <span class="bg-violet-500/20 text-violet-300 px-2 py-0.5 rounded text-[9px] uppercase font-bold border border-violet-500/30">${log.hands} Main(s)</span>
-                ${log.fingers ? `<span class="bg-blue-500/20 text-blue-300 px-2 py-0.5 rounded text-[9px] uppercase font-bold border border-blue-500/30">${log.fingers} Doigt(s)</span>` : ''}
-            </div>
-        ` : '')}
+            </div>`;
+    }
 
-        ${log.isSemi ? `
-            <div class="flex mb-3">
-                <span class="bg-orange-500/20 text-orange-400 px-2 py-0.5 rounded text-[9px] uppercase font-bold border border-orange-500/30">
-                    ▲ Semi-Pyramide
-                </span>
-            </div>
-        ` : ''}
+    // 3. Affichage des stats (Condition élargie aux Pyramides)
+    let statsHtml = '';
+    // On vérifie si c'est 'Tractions' OU 'Pyramide Tractions'
+    const isTractionType = log.type === 'Tractions' || log.type === 'Pyramide Tractions';
 
-        ${log.totalReps ? `
+    if (isTractionType && log.avgWorkPerRep) {
+        statsHtml = `
             <div class="grid grid-cols-2 gap-2 mb-3">
                 <div class="bg-violet-500/10 p-2 rounded-xl border border-violet-500/20 text-center">
                     <p class="text-[9px] text-slate-500 uppercase">Vitesse moy.</p>
@@ -557,8 +561,10 @@ function renderMuscuDetails(log) {
                     <p class="text-[9px] text-slate-500 uppercase">Repos moy.</p>
                     <p class="text-xs font-bold text-blue-400">${log.avgRestPerRep}s / rep</p>
                 </div>
-            </div>
-        ` : `
+            </div>`;
+    } else {
+        // Pour les Suspensions et Bras 90°
+        statsHtml = `
             <div class="grid grid-cols-3 gap-2 mb-3">
                 <div class="bg-slate-800/40 p-2 rounded-xl border border-slate-700 text-center">
                     <p class="text-[9px] text-slate-500 uppercase">Cycles</p>
@@ -572,8 +578,13 @@ function renderMuscuDetails(log) {
                     <p class="text-[9px] text-slate-500 uppercase">Repos</p>
                     <p class="text-xs font-bold text-blue-400">${log.rest || '-'}s</p>
                 </div>
-            </div>
-        `}
+            </div>`;
+    }
+
+    return `
+        ${variantTag || semiTag ? `<div class="flex flex-wrap gap-2 mb-3">${variantTag}${semiTag}</div>` : ''}
+        ${techHtml}
+        ${statsHtml}
     `;
 }
 
@@ -3581,3 +3592,48 @@ function resetClimbUI() {
     document.getElementById('climb-duration-input').value = '';
     currentClimbSession.laps = [];
 }
+
+
+// ------------------- PARAMETRE --------------------------------------
+function handleFileImport(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => DB.importAll(e.target.result);
+    reader.readAsText(file);
+    // Reset l'input pour pouvoir ré-importer le même fichier si besoin
+    event.target.value = '';
+}
+
+
+// Fonction pour rafraîchir les chiffres dans le menu
+async function refreshSettingsStats() {
+    const stats = await DB.getStorageStats();
+    document.getElementById('stat-count').innerText = stats.count;
+    document.getElementById('stat-size').innerText = stats.sizeMb + " MB";
+}
+
+// Optionnel : Déclencher la mise à jour quand on survole le parent des paramètres
+document.querySelector('.group').addEventListener('mouseenter', refreshSettingsStats);
+
+function toggleSettings(event) {
+    event.stopPropagation(); // Empêche la fermeture immédiate
+    const menu = document.getElementById('settings-menu');
+    const isVisible = !menu.classList.contains('invisible');
+    
+    if (isVisible) {
+        menu.classList.add('opacity-0', 'invisible');
+    } else {
+        refreshSettingsStats(); // On met à jour les stats à l'ouverture
+        menu.classList.remove('opacity-0', 'invisible');
+    }
+}
+
+// Fermer le menu si on clique n'importe où ailleurs sur l'écran
+window.addEventListener('click', () => {
+    const menu = document.getElementById('settings-menu');
+    if (menu) {
+        menu.classList.add('opacity-0', 'invisible');
+    }
+});
