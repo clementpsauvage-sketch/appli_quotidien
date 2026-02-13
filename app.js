@@ -270,8 +270,8 @@ function startComplexCycle(type) {
                         rest, 
                         cycles,
                         repsPerCycle: isTractions ? repsPerCycle : null, // Stockage pour l'historique
-                        avgWorkPerRep : isTractions? work*cycles/totalReps : null,
-                        avgRestPerRep : isTractions? rest*cycles/totalReps : null,
+                        avgWorkPerRep : isTractions? (work*cycles/totalReps).toFixed(1) : null,
+                        avgRestPerRep : isTractions? (rest*cycles/totalReps).toFixed(1) : null,
 
                         totalReps: totalReps, // Donnée clé pour renderVolumeChart
                         
@@ -3119,11 +3119,16 @@ async function updateGoalsDashboard() {
     const goalsContainer = document.getElementById('goals-container');
     if (!goalsContainer) return;
 
-    // Définition des constantes de temps
+    // --- Définition du temps ---
     const now = new Date();
     const todayStr = now.toISOString().split('T')[0];
-    const startWeek = new Date(); 
-    startWeek.setDate(now.getDate() - 7);
+
+    // CALCUL DU LUNDI DE LA SEMAINE EN COURS
+    const startWeek = new Date(now);
+    const day = startWeek.getDay(); // 0 (dimanche) à 6 (samedi)
+    const diff = startWeek.getDate() - day + (day === 0 ? -6 : 1); // Ajustement pour lundi
+    startWeek.setDate(diff);
+    startWeek.setHours(0, 0, 0, 0); // On commence à minuit pile le lundi
 
     let totalAchieved = 0;
     
