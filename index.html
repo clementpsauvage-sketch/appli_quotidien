@@ -348,6 +348,48 @@
                 </div>
             </div>
 
+            
+
+            <div class="bg-slate-800/50 p-4 rounded-xl mb-6 border border-slate-700">
+                <p class="text-[10px] uppercase tracking-widest text-slate-500 mb-3">Filtres d'affichage</p>
+                <div class="flex flex-wrap gap-4 items-end">
+                    <div class="flex-1 min-w-[120px]">
+                        <label class="block text-[10px] text-slate-400 mb-1">Dernières séances</label>
+                        <select id="stats-limit" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs text-white outline-none focus:border-violet-500">
+                            <option value="10">10 dernières</option>
+                            <option value="20">20 dernières</option>
+                            <option value="50">50 dernières</option>
+                            <option value="all" selected>Tout voir</option>
+                        </select>
+                    </div>
+
+                    <div class="flex-[2] min-w-[200px] flex gap-2">
+                        <div class="flex-1">
+                            <label class="block text-[10px] text-slate-400 mb-1">Du</label>
+                            <input type="date" id="stats-start" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs text-white">
+                        </div>
+                        <div class="flex-1">
+                            <label class="block text-[10px] text-slate-400 mb-1">Au</label>
+                            <input type="date" id="stats-end" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs text-white">
+                        </div>
+                    </div>
+
+                    <div class="flex gap-2 w-full mt-2 sm:mt-0 sm:w-auto">
+                        <button onclick="updateStatsDashboard()" class="flex-1 sm:flex-none bg-violet-600 hover:bg-violet-500 text-white text-[10px] font-bold uppercase px-4 py-2 rounded-lg transition-colors">
+                            Entrer
+                        </button>
+                        <button onclick="resetGraphFilters()" class="flex-1 sm:flex-none bg-slate-700 hover:bg-red-500/20 hover:text-red-400 text-slate-300 text-[10px] font-bold uppercase px-4 py-2 rounded-lg transition-all">
+                            Effacer
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+
+
+            
+
+
             <div class="glass p-4 rounded-3xl mb-6">
                 <div class="flex justify-between items-center mb-4">
                     <button onclick="changeChart(-1)" class="p-2 hover:bg-white/10 rounded-full transition-colors">
@@ -382,7 +424,6 @@
                             <canvas id="radarChart2"></canvas>
                         </div>
                     </div>
-                    <div id="wrapper-volumeChart" class="chart-wrapper hidden w-full h-[350px] flex items-center justify-center"><canvas id="languagesChart"></canvas></div>
                 </div>
             </div>
             

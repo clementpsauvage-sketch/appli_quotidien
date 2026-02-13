@@ -5,6 +5,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     // On attend que les données soient chargées avant de dessiner
     await renderLogs(); 
+    // 1. On règle les dates par défaut (1 mois)
+    setDefaultFilterDates();
+    // FORCER LA SÉLECTION "TOUT VOIR"
+    const limitSelect = document.getElementById('stats-limit');
+    if (limitSelect) {
+        limitSelect.value = "all"; 
+    }
+
+    // Lancer le premier affichage
+    // 2. On lance le dashboard qui va lire ces dates
     await updateGoalsDashboard();
     // VERIFICATION CHRONO MUSIQUE EN COURS
     // RÉCUPÉRATION COURSE
@@ -932,187 +942,156 @@ async function migrateFromLocalStorage() {
 
 
 async function updateStatsDashboard() {
-    // --- NOUVEAU : On attend les logs de la base de données ---
-    const logs = await DB.getLogs(); 
-    
-    if (!logs || logs.length === 0) {
+    // 1. RÉCUPÉRATION INITIALE
+    const allLogs = await DB.getLogs(); 
+    if (!allLogs || allLogs.length === 0) {
         console.log("Aucune donnée pour les stats");
         return;
     }
 
-    // --- 1. STATS PYRAMIDE ---
-    // --- 1. STATS TRACTIONS CUMULÉES (Pyramide + Cycles) ---
-    const tractionLogs = logs.filter(l => l.type && (l.type.includes('Pyramide') || l.type === 'Tractions'));
+    // 2. PRÉPARATION DES FILTRES (POUR LES GRAPHS SPÉCIFIQUES)
+    const limit = document.getElementById('stats-limit')?.value || 'all';
+    const startDate = document.getElementById('stats-start')?.value;
+    const endDate = document.getElementById('stats-end')?.value;
 
+    let filteredLogs = [...allLogs];
+
+    if (startDate) {
+        const start = new Date(startDate);
+        start.setHours(0, 0, 0, 0);
+        filteredLogs = filteredLogs.filter(l => new Date(l.timestamp) >= start);
+    }
+    if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        filteredLogs = filteredLogs.filter(l => new Date(l.timestamp) <= end);
+    }
+    if (limit !== 'all') {
+        filteredLogs = filteredLogs.slice(0, parseInt(limit));
+    }
+
+    // On prépare une version chronologique (ancien -> récent) pour les graphiques linéaires
+    const filteredChronological = [...filteredLogs].reverse();
+    const allChronological = [...allLogs].reverse();
+
+    const legendEl = document.getElementById('stats-period-legend');
+
+    if (legendEl) {
+        if (startDate && endDate) {
+            // Formatage lisible (ex: 2024-02-01 -> 01/02/2024)
+            const d1 = startDate.split('-').reverse().join('/');
+            const d2 = endDate.split('-').reverse().join('/');
+            legendEl.innerText = `Période du ${d1} au ${d2}`;
+        } else if (startDate) {
+            const d1 = startDate.split('-').reverse().join('/');
+            legendEl.innerText = `Depuis le ${d1}`;
+        } else if (endDate) {
+            const d2 = endDate.split('-').reverse().join('/');
+            legendEl.innerText = `Jusqu'au ${d2}`;
+        } else {
+            legendEl.innerText = "Toutes les séances";
+        }
+    }
+    
+
+    // ==========================================
+    // 3. MISES À JOUR DES COMPTEURS (TEXTE)
+    // ==========================================
+
+    // --- TRACTIONS ---
+    const tractionLogs = allLogs.filter(l => l.type && (l.type.includes('Pyramide') || l.type === 'Tractions'));
     if (tractionLogs.length > 0) {
-        // On additionne le totalReps (calculé automatiquement dans les deux modes maintenant)
         const totalReps = tractionLogs.reduce((acc, l) => acc + (parseInt(l.totalReps) || 0), 0);
-        
-        // Pour la vitesse moyenne, on ne garde que les sessions qui ont l'info (souvent les pyramides)
         const logsWithSpeed = tractionLogs.filter(l => l.avgWorkPerRep);
         const avgSpeed = logsWithSpeed.length > 0 
             ? logsWithSpeed.reduce((acc, l) => acc + parseFloat(l.avgWorkPerRep), 0) / logsWithSpeed.length 
             : 0;
 
-        // Mise à jour de l'affichage du compteur total
-        if(document.getElementById('stat-total-reps')) {
-            document.getElementById('stat-total-reps').innerText = totalReps;
-        }
-
-        // Mise à jour de la vitesse moyenne (si applicable)
-        if(document.getElementById('stat-avg-speed') && avgSpeed > 0) {
-            document.getElementById('stat-avg-speed').innerText = avgSpeed.toFixed(1) + "s";
-        }
-        
-        // Mise à jour du graphique de progression (les 10 dernières séances de tractions, tout type confondu)
-        if (typeof renderProgressionChart === "function") {
-            renderProgressionChart(tractionLogs.slice(-10)); 
-        }
+        if(document.getElementById('stat-total-reps')) document.getElementById('stat-total-reps').innerText = totalReps;
+        if(document.getElementById('stat-avg-speed') && avgSpeed > 0) document.getElementById('stat-avg-speed').innerText = avgSpeed.toFixed(1) + "s";
     }
 
-    // --- 2. STATS SUSPENSION & BRAS 90 (Modifié pour comparaison) ---
-    const filterEl = document.getElementById('stat-finger-filter');
-    const fingerFilter = filterEl ? filterEl.value : 'all';
-
-    const hangLogs = logs.filter(l => {
+    // --- SUSPENSIONS & BRAS 90 ---
+    const fingerFilter = document.getElementById('stat-finger-filter')?.value || 'all';
+    const hangLogs = allLogs.filter(l => {
         const typeLower = (l.type || "").toLowerCase();
         const isFingerHang = typeLower.includes('suspension') || typeLower.includes('deadhang');
-        if (!isFingerHang) return false;
-        return fingerFilter === 'all' || String(l.fingers) === String(fingerFilter);
+        return isFingerHang && (fingerFilter === 'all' || String(l.fingers) === String(fingerFilter));
     });
+    const arms90Logs = allLogs.filter(l => (l.type || "").toLowerCase().includes('bras'));
 
-    const arms90Logs = logs.filter(l => (l.type || "").toLowerCase().includes('bras'));
-
-    // Calcul volume Doigts
     const totalSecondsHang = hangLogs.reduce((acc, l) => acc + (parseInt(l.cycles) * parseInt(l.work) || 0), 0);
-
-    // Calcul volume Bras 90 détaillé
     const armStats = { droit: 0, gauche: 0, deux: 0 };
     const totalSeconds90 = arms90Logs.reduce((acc, l) => {
         let vol = parseInt(l.cycles) * parseInt(l.work) || 0;
-        
         const side = (l.side || "").toLowerCase();
         if (side.includes('droit')) armStats.droit += vol;
         else if (side.includes('gauche')) armStats.gauche += vol;
         else armStats.deux += vol;
-
         return acc + vol;
     }, 0);
 
-    // Affichage des compteurs
-    if (document.getElementById('stat-total-hang')) {
-        document.getElementById('stat-total-hang').innerText = totalSecondsHang + "s";
-    }
-    if (document.getElementById('stat-total-arms90')) {
-        document.getElementById('stat-total-arms90').innerText = totalSeconds90 + "s";
-    }
+    if (document.getElementById('stat-total-hang')) document.getElementById('stat-total-hang').innerText = totalSecondsHang + "s";
+    if (document.getElementById('stat-total-arms90')) document.getElementById('stat-total-arms90').innerText = totalSeconds90 + "s";
 
-    // Calcul du ratio de force pour l'affichage textuel
-    const ratioInfo = document.getElementById('arm-ratio-info');
-    if (ratioInfo && (armStats.droit > 0 || armStats.gauche > 0)) {
-        const diff = Math.abs(armStats.droit - armStats.gauche);
-        const more = armStats.droit > armStats.gauche ? "Droit" : "Gauche";
-        ratioInfo.innerText = diff > 0 ? `Dominance : ${more} (+${diff}s)` : "Équilibre parfait";
-    }
-
-    // Appel du nouveau graphique
-    renderArmBalanceChart(armStats);
-    
-    // --- 3. STATS COURSE ---
-    const runLogs = logs.filter(l => l.type === 'Course');
+    // --- COURSE & AUTRES ---
+    const runLogs = allLogs.filter(l => l.type === 'Course');
     if (runLogs.length > 0) {
         const totalDist = runLogs.reduce((acc, l) => acc + (parseFloat(l.distance) || 0), 0);
-        const distEl = document.getElementById('stat-run-total-dist');
-        if(distEl) distEl.innerText = totalDist.toFixed(1) + "km";
-
-        const thirtyDaysAgo = new Date().getTime() - (30 * 24 * 60 * 60 * 1000);
-        const recentRuns = runLogs.filter(l => new Date(l.timestamp).getTime() > thirtyDaysAgo);
-        const freqEl = document.getElementById('stat-run-freq');
-        if(freqEl) freqEl.innerText = recentRuns.length;
-
-        if (typeof renderRunChart === "function") renderRunChart(runLogs.slice().reverse());
+        if(document.getElementById('stat-run-total-dist')) document.getElementById('stat-run-total-dist').innerText = totalDist.toFixed(1) + "km";
     }
 
-    // --- 4. AUTRES TOTAUX (MUSIQUE / ZEN) ---
-    const totals = logs.reduce((acc, log) => {
+    const totals = allLogs.reduce((acc, log) => {
         if (log.type === 'Étirement') acc.stretch += (parseInt(log.duration) || 0);
         if (log.type === 'Musique') acc.music += (parseInt(log.duration) || 0);
         return acc;
     }, { stretch: 0, music: 0 });
 
-    const stretchEl = document.getElementById('stat-stretch-total');
-    const musicEl = document.getElementById('stat-music-total');
-    if(stretchEl) stretchEl.innerText = `${Math.round(totals.stretch / 60)} min`;
-    if(musicEl) musicEl.innerText = `${Math.round(totals.music / 60)} min`;
+    if(document.getElementById('stat-stretch-total')) document.getElementById('stat-stretch-total').innerText = `${Math.round(totals.stretch / 60)} min`;
+    if(document.getElementById('stat-music-total')) document.getElementById('stat-music-total').innerText = `${Math.round(totals.music / 60)} min`;
 
-    // --- 5. APPELS DES GRAPHIQUES GENERAUX ---
-    if (typeof renderMainChart === "function") renderMainChart(logs);
-    if (typeof renderVolumeChart === "function") renderVolumeChart(logs);
+    // ==========================================
+    // 4. APPEL DES GRAPHIQUES (AVEC OU SANS FILTRE)
+    // ==========================================
 
-    // --- 6. STATS ESCALADE (MODIFIÉ : BLOC & VOIE SÉPARÉS) ---
-    const climbLogs = logs.filter(l => l.type === 'Escalade' || l.type === 'escalade');
-
-    if (climbLogs.length > 0) {
-        // 6a. Calculs des compteurs globaux (Volumes et Success Rate)
-        const totalAttempts = climbLogs.reduce((acc, l) => acc + (l.details ? l.details.length : 0), 0);
-        const totalSuccess = climbLogs.reduce((acc, l) => {
-            return acc + (l.details ? l.details.filter(d => d.success).length : 0);
-        }, 0);
-
-        const climbVolEl = document.getElementById('stat-climb-volume');
-        const climbRateEl = document.getElementById('stat-climb-success-rate');
-        
-        if(climbVolEl) climbVolEl.innerText = totalAttempts;
-        if(climbRateEl) {
-            const rate = totalAttempts > 0 ? Math.round((totalSuccess / totalAttempts) * 100) : 0;
-            climbRateEl.innerText = rate + "%";
-        }
-
-        // 6b. APPELS DES DEUX NOUVELLES FONCTIONS D'ÉVOLUTION
-        // On passe les logs triés du plus ancien au plus récent pour la ligne de temps
-        const sortedClimbLogs = climbLogs.slice().reverse();
-
-        if (typeof renderBlocEvolutionChart === "function") {
-            renderBlocEvolutionChart(sortedClimbLogs);
-        }
-        
-        if (typeof renderVoieEvolutionChart === "function") {
-            renderVoieEvolutionChart(sortedClimbLogs);
-        }
-    }
-
-    // --- 7. NOUVEAU : HEATMAP DE DISCIPLINE ---
-    if (typeof renderHeatmap === "function") {
-        renderHeatmap(logs);
-    }
-
-    // --- 8. NOUVEAU : RADAR DE L'ÉQUILIBRE ---
-    // On définit ici les objectifs (en minutes par semaine par ex)
-    const objectifsHebdo = {
-        'Escalade': 120, 
-        'Musculation': 60,
-        'Course': 90,
-        'Musique': 130,
-        'Stretching': 60
-    };
-    if (typeof renderRadarChart === "function") {
-        renderRadarChart(logs, objectifsHebdo);
-    }
-
-    // --- 9. NOUVEAU : SCATTER PLOT (EFFORT VS PERF) ---
-    if (typeof renderScatterChart === "function") {
-        renderScatterChart(logs);
-    }
-
-    // --- 10. NOUVEAU : CHARGE DE FATIGUE (7j vs 28j) ---
-    if (typeof renderFatigueChart === "function") {
-        renderFatigueChart(logs);
-    }
-    // --- 11. Compétence
-    if (typeof renderCompetenceRadar === "function") {
-        renderCompetenceRadar(logs);
-    }
+    // --- GROUPE 1 : SANS FILTRE (HISTORIQUE TOTAL) ---
+    if (typeof renderMainChart === "function") renderMainChart(allLogs);
+    if (typeof renderVolumeChart === "function") renderVolumeChart(allLogs);
+    if (typeof renderFatigueChart === "function") renderFatigueChart(allLogs);
+    if (typeof renderHeatmap === "function") renderHeatmap(allLogs);
     
+    // Radars (Équilibre & Profil) - Pas de tri/filtre
+    const objectifsHebdo = { 'Escalade': 120, 'Musculation': 60, 'Course': 90, 'Musique': 130, 'Stretching': 60 };
+    if (typeof renderRadarChart === "function") renderRadarChart(allLogs, objectifsHebdo);
+    if (typeof renderCompetenceRadar === "function") renderCompetenceRadar(allLogs);
+
+    // --- GROUPE 2 : AVEC FILTRE (PLAGE DYNAMIQUE) ---
+    // Note: On utilise filteredChronological pour que la gauche du graph soit le plus ancien de la sélection
+    
+    if (typeof renderRunChart === "function") {
+        const filteredRuns = filteredLogs.filter(l => l.type === 'Course').reverse();
+        renderRunChart(filteredRuns);
+    }
+
+    if (typeof renderEnduranceChart === "function" || typeof renderProgressionChart === "function") {
+        const filteredTraction = filteredLogs.filter(l => l.type && (l.type.includes('Pyramide') || l.type === 'Tractions')).reverse();
+        if (typeof renderProgressionChart === "function") renderProgressionChart(filteredTraction);
+        // Si enduranceChart est une fonction séparée :
+        if (typeof renderEnduranceChart === "function") renderEnduranceChart(filteredTraction); 
+    }
+
+    if (typeof renderBlocEvolutionChart === "function" || typeof renderVoieEvolutionChart === "function") {
+        const filteredClimb = filteredLogs.filter(l => l.type === 'Escalade' || l.type === 'escalade').reverse();
+        if (typeof renderBlocEvolutionChart === "function") renderBlocEvolutionChart(filteredClimb);
+        if (typeof renderVoieEvolutionChart === "function") renderVoieEvolutionChart(filteredClimb);
+    }
+
+    if (typeof renderScatterChart === "function") {
+        renderScatterChart(filteredLogs); // Scatter chart utilise généralement le filteredLogs direct
+    }
+
+    // Affichage des dominance Bras 90 basé sur les stats calculées
+    renderArmBalanceChart(armStats);
 }
 
 function renderArmBalanceChart(data) {
@@ -1420,7 +1399,8 @@ function renderFatigueChart(logs) {
     });
 
     // 5. Rendu du graphique avec Chart.js
-    new Chart(ctx, {
+    if (window.scatterChartInstance) window.fatigueChartInstance.destroy();
+    window.fatigueChartInstance = new Chart(ctx, {
         type: 'line',
         data: {
             labels: last28Days,
@@ -1467,12 +1447,16 @@ function renderScatterChart(logs) {
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     
-    // 1. Dictionnaire pour convertir les textes en positions sur l'axe X
+    // On reprend ton premier mapping (linéaire et simple)
     const levelMapping = {
-        // Couleurs
-        'blanc': 1, 'jaune': 2, 'vert': 3, 'bleu': 4, 'rouge': 5, 'noir': 6, 'violet': 7,
-        // Cotations (on les intercale ou on les suit)
-        '4c':2.1, '5a':2.4, '5b':2.9, '5c':3.5, '6a':4.8, '6b':5.1, '6c':5.5, '7a':6.4, '7b':6.8,'7c':7,'8a':7.5,'8b':8,'8c':9,
+        // Couleurs (Positions entières)
+        'jaune': 1, 'vert': 2, 'bleu': 3, 'rouge': 4, 'noir': 5, 'violet': 6,
+        
+        // Cotations (Positions intercalées comme dans ton 1er exemple)
+        '4c': 1.5, '5a': 2.0, '5b': 2.5, '5c': 3.0, 
+        '6a': 3.5, '6b': 4.0, '6c': 4.5, 
+        '7a': 5.0, '7b': 5.5, '7c': 6.0, 
+        '8a': 6.5, '8b': 7.0, '8c': 7.5
     };
 
     const climbLogs = logs.filter(l => l.type === 'Escalade' && l.details);
@@ -1480,7 +1464,6 @@ function renderScatterChart(logs) {
 
     climbLogs.forEach(log => {
         log.details.forEach(lap => {
-            // On récupère le texte, on enlève les espaces et on met en minuscule
             const rawLevel = String(lap.level || "").toLowerCase().trim();
             const xVal = levelMapping[rawLevel] || parseFloat(rawLevel);
             const yVal = parseInt(lap.effort);
@@ -1488,7 +1471,7 @@ function renderScatterChart(logs) {
             if (xVal && !isNaN(yVal)) {
                 dataPoints.push({
                     x: xVal + (Math.random() * 0.3 - 0.15), // Jitter
-                    y: yVal + (Math.random() * 0.3 - 0.15), // Jitter
+                    y: yVal + (Math.random() * 0.3 - 0.15),
                     originalLevel: lap.level,
                     effortReal: yVal
                 });
@@ -1514,15 +1497,40 @@ function renderScatterChart(logs) {
             responsive: true,
             maintainAspectRatio: false,
             scales: {
+                // AXE DU BAS : COULEURS (Basé sur ton 1er exemple)
                 x: { 
-                    title: { display: true, text: 'Difficulté (Couleurs & Cotations)', color: '#94a3b8' },
-                    min: 0, max: 8,
+                    position: 'bottom',
+                    title: { display: true, text: 'Difficulté (Couleurs)', color: '#94a3b8' },
+                    min: 0, max: 7,
                     ticks: {
                         stepSize: 1,
                         color: '#94a3b8',
-                        callback: (v) => ["", "Blanc", "Jaune", "Vert", "Bleu", "Rouge", "Noir", "Violet"][Math.round(v)] || v
+                        callback: (v) => ["", "Jaune", "Vert", "Bleu", "Rouge", "Noir", "Violet"][Math.round(v)] || ""
                     },
                     grid: { color: 'rgba(255,255,255,0.05)' }
+                },
+                // AXE DU HAUT : COTATIONS (Second axe synchronisé)
+                x2: {
+                    position: 'top',
+                    title: { display: true, text: 'Cotations (Voie)', color: '#94a3b8' },
+                    min: 0, max: 7,
+                    afterBuildTicks: axis => {
+                        // On force les graduations sur les demi-points (1.5, 2.0, 2.5...)
+                        axis.ticks = [0.0,0.5,1.0,1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0,6.5, 7.0].map(v => ({value: v}));
+                    },
+                    ticks: {
+                        color: '#94a3b8',
+                        callback: function(value) {
+                            const labels = {
+                                0.0: '3c',0.5: '4a',1.0: '4b',
+                                1.5: '4c', 2.0: '5a',2.5: '5b', 3.0: '5c', 3.5: '6a', 
+                                4.0: '6b', 4.5: '6c', 5.0: '7a', 5.5: '7b', 
+                                6.0: '7c',6.5: '8a', 7.0: '8b'
+                            };
+                            return labels[value] || "";
+                        }
+                    },
+                    grid: { display: false }
                 },
                 y: { 
                     title: { display: true, text: 'Effort (1-5)', color: '#94a3b8' },
@@ -1535,13 +1543,15 @@ function renderScatterChart(logs) {
                 legend: { display: false },
                 tooltip: {
                     callbacks: {
-                        label: (ctx) => ` Bloc: ${ctx.raw.originalLevel} - Effort: ${ctx.raw.effortReal}/5`
+                        label: (ctx) => ` Niveau: ${ctx.raw.originalLevel} - Effort: ${ctx.raw.effortReal}/5`
                     }
                 }
             }
         }
     });
 }
+
+
 
 const voieLevelMap = {
     '4c': 1, '5a': 2, '5b': 3, '5c': 4,
@@ -1809,7 +1819,7 @@ function renderProgressionChart(data) {
     // --- CORRECTION ICI : On inverse l'ordre des données avant le rendu ---
     // [...data] crée une copie pour ne pas impacter le reste de l'application
     // .reverse() remet le plus ancien à gauche (index 0)
-    const displayData = [...data].reverse() ;
+    const displayData = [...data] ;
 
     window.mystatsChart = new Chart(ctx, {
         type: 'line',
@@ -3021,17 +3031,34 @@ function changeChart(direction) {
     if (currentChartIndex < 0) currentChartIndex = charts.length - 1;
     if (currentChartIndex >= charts.length) currentChartIndex = 0;
 
-    // 2. Mettre à jour l'affichage
     const activeChart = charts[currentChartIndex];
     
-    // Cacher tous les wrappers et afficher le bon
-    document.querySelectorAll('.chart-wrapper').forEach(el => el.classList.add('hidden'));
-    document.getElementById(`wrapper-${activeChart.id}`).classList.remove('hidden');
+    // 2. Gestion des filtres et du titre
+    const filteredCharts = ['runChart', 'statsChart', 'blocEvolutionChart', 'voieEvolutionChart', 'scatterChart'];
     
-    // Mettre à jour le titre
-    document.getElementById('chart-title').innerText = activeChart.title;
+    let fullTitle = activeChart.title;
 
-    // 3. Redessiner si nécessaire pour corriger les problèmes de taille
+    // Si le graph est filtrable, on cherche les dates
+    if (filteredCharts.includes(activeChart.id)) {
+        const start = document.getElementById('stats-start')?.value;
+        const end = document.getElementById('stats-end')?.value;
+        
+        if (start || end) {
+            const d1 = start ? start.split('-').reverse().slice(0,2).join('/') : '...';
+            const d2 = end ? end.split('-').reverse().slice(0,2).join('/') : 'Jourdhui';
+            fullTitle += ` (${d1} au ${d2})`;
+        }
+    }
+
+    // Mettre à jour le texte du titre
+    document.getElementById('chart-title').innerText = fullTitle;
+
+    // 3. Mise à jour visuelle des wrappers
+    document.querySelectorAll('.chart-wrapper').forEach(el => el.classList.add('hidden'));
+    const wrapper = document.getElementById(`wrapper-${activeChart.id}`);
+    if (wrapper) wrapper.classList.remove('hidden');
+
+    // 4. Redessiner les données
     updateStatsDashboard(); 
 }
 
@@ -3637,3 +3664,34 @@ window.addEventListener('click', () => {
         menu.classList.add('opacity-0', 'invisible');
     }
 });
+
+
+function setDefaultFilterDates() {
+    const today = new Date();
+    const oneMonthAgo = new Date();
+    
+    // On retire 1 mois à la date d'aujourd'hui
+    oneMonthAgo.setMonth(today.getMonth() - 1);
+
+    // Formatage en YYYY-MM-DD pour les inputs type="date"
+    const formatDate = (date) => date.toISOString().split('T')[0];
+
+    document.getElementById('stats-start').value = formatDate(oneMonthAgo);
+    document.getElementById('stats-end').value = formatDate(today);
+}
+
+function resetGraphFilters() {
+    // 1. On vide les inputs
+    document.getElementById('stats-start').value = "";
+    document.getElementById('stats-end').value = "";
+    
+    // 2. On remet la limite sur "Tout voir" (ou 15 selon ta préférence)
+    document.getElementById('stats-limit').value = "all";
+
+    // On vide la légende ou on remet "Toutes les séances"
+    const legendEl = document.getElementById('stats-period-legend');
+    if (legendEl) legendEl.innerText = "Toutes les séances";
+    
+    // 3. On relance la mise à jour des graphiques
+    updateStatsDashboard();
+}
