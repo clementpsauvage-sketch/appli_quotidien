@@ -1,0 +1,68 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap');
+body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #f8fafc; }
+.glass { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1); }
+.active-tab { border-bottom: 3px solid #8b5cf6; color: #8b5cf6; }
+
+.mood-btn {
+    width: 45px;
+    height: 45px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+.mood-1 { background: #ef4444; }
+.mood-2 { background: #f97316; }
+.mood-3 { background: #eab308; }
+.mood-4 { background: #3b82f6; }
+.mood-5 { background: #a855f7; }
+.mood-btn:hover { transform: scale(1.1); filter: brightness(1.2); }
+
+/* Cache la scrollbar mais permet le scroll */
+.no-scrollbar::-webkit-scrollbar {
+    display: none;
+}
+.no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+
+/* Animation pour le changement d'exercice */
+#stretch-exercise {
+    animation: fadeIn 0.5s ease-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+#timer-progress {
+    transition: stroke-dashoffset 1s linear;
+    transform: rotate(-90deg);
+    transform-origin: center;
+}
+/* Style des boutons du menu */
+.stretch-card {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    transition: all 0.3s ease;
+}
+
+.stretch-card:active {
+    background: rgba(16, 185, 129, 0.1);
+    border-color: rgba(16, 185, 129, 0.3);
+}
+
+.chart-wrapper {
+    width: 100%;
+    height: 200px; /* Taille fixe pour la cohérence */
+}
+
+/* Optionnel : transition douce */
+.chart-wrapper.hidden {
+    display: none;
+}
+
+
+

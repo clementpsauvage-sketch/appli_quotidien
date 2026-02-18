@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zenith Personal Coach</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link rel="stylesheet" href="style.css">
+    <link rel="manifest" href="manifest.json">
+</head>
+<body class="pb-24">
+
+    <header class="p-6 flex justify-between items-center border-b border-slate-800 bg-slate-900/50 sticky top-0 z-50">
+        <h1 class="text-2xl font-light tracking-widest uppercase">Zenith<span class="font-bold text-violet-500">PWA</span></h1>
+        
+        <div class="flex gap-4 items-center">
+            <i data-lucide="calendar" onclick="showSection('objectifs')" class="w-6 h-6 text-slate-400 cursor-pointer hover:text-violet-400 transition-colors"></i>
+            
+            <div class="relative py-2 group"> 
+                <i data-lucide="settings" 
+                onclick="toggleSettings(event)" 
+                class="w-6 h-6 text-slate-400 cursor-pointer hover:text-violet-400 active:text-violet-600 transition-colors"></i>
+                
+                <div id="settings-menu" 
+                    class="absolute right-0 top-full w-64 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl 
+                            opacity-0 invisible group-hover:opacity-100 group-hover:visible 
+                            transition-all duration-200 z-50 overflow-hidden">
+
+                    <div class="p-2 border-b border-slate-800">
+                        <p class="text-[8px] uppercase text-slate-500 font-bold px-2 mb-1">Transfert</p>
+                        <button onclick="DB.exportAll()" class="w-full flex items-center gap-3 px-3 py-2 text-[10px] text-slate-300 hover:bg-white/5 rounded-lg transition-colors">
+                            <i data-lucide="download" class="w-3.5 h-3.5 text-violet-400"></i> Exporter JSON
+                        </button>
+                        
+                        <button onclick="document.getElementById('import-file').click()" class="w-full flex items-center gap-3 px-3 py-2 text-[10px] text-slate-300 hover:bg-white/5 rounded-lg transition-colors">
+                            <i data-lucide="upload" class="w-3.5 h-3.5 text-emerald-400"></i> Importer JSON
+                        </button>
+                        
+                        <input type="file" id="import-file" class="hidden" accept=".json" onchange="handleFileImport(event)">
+                    </div>
+
+                    <div id="stats-container" class="p-3 border-b border-slate-800 bg-slate-950/50">
+                        <p class="text-[8px] uppercase text-slate-500 font-bold mb-2">Statistiques de stockage</p>
+                        <div class="flex justify-between items-center mb-1">
+                            <span class="text-[10px] text-slate-400">Séances :</span>
+                            <span id="stat-count" class="text-[10px] font-mono text-white">-</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-[10px] text-slate-400">Poids :</span>
+                            <span id="stat-size" class="text-[10px] font-mono text-white">- MB</span>
+                        </div>
+                    </div>
+
+                    <div class="p-2 bg-red-500/5">
+                        <button onclick="DB.dangerZoneReset()" class="w-full flex items-center gap-3 px-3 py-2 text-[10px] text-red-400 hover:bg-red-500/20 rounded-lg transition-colors font-bold">
+                            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> RÉINITIALISER L'APP
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+        <!--
+        <div class="mt-6 p-4 glass rounded-3xl border border-amber-500/30 bg-amber-500/5">
+            <h3 class="text-amber-400 font-bold text-sm mb-2 flex items-center gap-2">
+                <i data-lucide="database" class="w-4 h-4"></i>
+                Anciennes données détectées ?
+            </h3>
+            <p class="text-xs text-slate-400 mb-4">Si tes anciennes séances n'apparaissent pas dans les stats, clique sur le bouton ci-dessous pour les transférer vers la nouvelle base de données.</p>
+            <button onclick="migrateFromLocalStorage()" class="w-full py-3 bg-amber-500 hover:bg-amber-600 text-white rounded-2xl font-bold text-sm transition-all shadow-lg shadow-amber-500/20">
+                Transférer mes données (Migration)
+            </button>
+        </div>-->
+
+    <main id="app-content" class="p-4 max-w-md mx-auto">
+        
+        <section id="section-muscu">
+            <div id="exercise-menu" class="space-y-4">
+                <h2 class="text-xl font-semibold mb-6 flex items-center gap-2">
+                    <i data-lucide="dumbbell" class="text-violet-400"></i> Musculation
+                </h2>
+                
+                <button onclick="loadExercise('deadhang')" class="glass w-full p-6 rounded-3xl flex justify-between items-center group">
+                    <div class="text-left">
+                        <h3 class="font-bold text-lg group-hover:text-violet-400 transition-colors">Suspension</h3>
+                        <p class="text-xs text-slate-400">Dead Hang • Hangboard • Précision doigts</p>
+                    </div>
+                    <i data-lucide="chevron-right"></i>
+                </button>
+
+                <button onclick="loadExercise('pyramid')" class="glass w-full p-6 rounded-3xl flex justify-between items-center group">
+                    <div class="text-left">
+                        <h3 class="font-bold text-lg group-hover:text-violet-400 transition-colors">Pyramide</h3>
+                        <p class="text-xs text-slate-400">Tractions • Volume & Repos</p>
+                    </div>
+                    <i data-lucide="chevron-right"></i>
+                </button>
+
+                <button onclick="loadExercise('tractions')" class="glass w-full p-6 rounded-3xl flex justify-between items-center group">
+                    <div class="text-left">
+                        <h3 class="font-bold text-lg group-hover:text-violet-400 transition-colors">Tractions</h3>
+                        <p class="text-xs text-slate-400">Strictes ou Négatives • Cycles chrono</p>
+                    </div>
+                    <i data-lucide="chevron-right"></i>
+                </button>
+
+                <button onclick="loadExercise('arms90')" class="glass w-full p-6 rounded-3xl flex justify-between items-center group">
+                    <div class="text-left">
+                        <h3 class="font-bold text-lg group-hover:text-violet-400 transition-colors">Blocage Bras</h3>
+                        <p class="text-xs text-slate-400">Angle & Côté personnalisables</p>
+                    </div>
+                    <i data-lucide="chevron-right"></i>
+                </button>
+            </div>
+
+            <div id="exercise-active" class="hidden">
+                <button onclick="backToMenu()" class="mb-4 text-slate-400 flex items-center gap-2 text-sm">
+                    <i data-lucide="arrow-left" class="w-4 h-4"></i> Retour
+                </button>
+                <div id="exercise-content"></div>
+            </div>
+        </section>
+
+        <section id="section-stretching" class="hidden p-4">
+            <div class="glass p-6 rounded-3xl mb-6">
+                <h2 class="text-2xl font-black mb-2 flex items-center gap-2">
+                    <i data-lucide="accessibility" class="text-emerald-400"></i> MOBILITÉ
+                </h2>
+                <p class="text-[10px] text-slate-500 uppercase tracking-widest font-bold ml-1">Pratique & Récupération</p>
+            </div>
+            
+            <div class="px-2 mb-6">
+                <p class="text-[10px] uppercase tracking-widest text-slate-500 mb-3 ml-1">Filtrer les séances</p>
+                <div class="flex flex-wrap gap-2">
+                    <select id="filter-stretch-type" onchange="renderStretchCatalog()" class="bg-slate-800 border border-slate-700 text-white text-[10px] rounded-lg px-2 py-2 outline-none focus:border-emerald-500">
+                        <option value="all">Style</option>
+                        <option value="Actif">Actif</option>
+                        <option value="Passif">Passif</option>
+                        <option value="Mixte">Mixte</option>
+                        <option value="Profond">Profond</option>
+                    </select>
+
+                    <select id="filter-stretch-duration" onchange="renderStretchCatalog()" class="bg-slate-800 border border-slate-700 text-white text-[10px] rounded-lg px-2 py-2 outline-none focus:border-emerald-500">
+                        <option value="all">Durée</option>
+                        <option value="Court">< 10 min</option>
+                        <option value="Moyen">10-20 min</option>
+                        <option value="Long"> 20-60 min</option>
+                        <option value="Tres long">> 60 min</option>
+                    </select>
+
+                    <select id="filter-stretch-focus" onchange="renderStretchCatalog()" class="bg-slate-800 border border-slate-700 text-white text-[10px] rounded-lg px-2 py-2 outline-none focus:border-emerald-500">
+                        <option value="all">Focus</option>
+                        <option value="Grimpe">Grimpe</option>
+                        <option value="Bureau">Bureau</option>
+                        <option value="Hanches">Hanches</option>
+                        <option value="Dos">Dos</option>
+                        <option value="Full Body">Full Body</option>
+                    </select>
+
+                    <select id="filter-stretch-regularite" onchange="renderStretchCatalog()" class="bg-slate-800 border border-slate-700 text-white text-[10px] rounded-lg px-2 py-2 outline-none focus:border-emerald-500">
+                        <option value="all">Régularité</option>
+                        <option value="Quotidien">Quotidien</option>
+                        <option value="Hebdomadaire">Hebdomadaire</option>
+                        <option value="Mensuel">Mensuel</option>
+                    </select>
+                </div>
+            </div>
+
+            <div id="stretch-menu-container">
+                <div class="flex items-center justify-between mb-4 px-2">
+                    <span class="text-[10px] text-slate-500 uppercase font-black">Programmes disponibles</span>
+                    <span id="stretch-count" class="text-[10px] bg-emerald-500/20 text-emerald-400 px-2 py-1 rounded-full font-bold">0 SÉANCES</span>
+                </div>
+                
+                <div id="stretch-menu" class="grid gap-3 max-h-[60vh] overflow-y-auto pr-2 no-scrollbar pb-20">
+                </div>
+            </div>
+
+            <div id="stretch-active" class="hidden glass p-8 rounded-[40px] text-center relative overflow-hidden">
+                <div class="absolute top-0 left-1/2 -translate-x-1/2 w-64 h-64 bg-emerald-500/5 rounded-full blur-3xl -z-10"></div>
+                <p id="stretch-name" class="text-emerald-400 font-black uppercase tracking-[0.3em] text-[10px] mb-8"></p>
+                <div id="stretch-exercise" class="min-h-[200px] flex flex-col items-center justify-center"></div>
+                <div class="relative inline-block mt-8">
+                    <svg class="w-32 h-32 transform -rotate-90">
+                        <circle cx="64" cy="64" r="60" stroke="currentColor" stroke-width="4" fill="transparent" class="text-white/5"></circle>
+                        <circle id="timer-progress" cx="64" cy="64" r="60" stroke="currentColor" stroke-width="4" fill="transparent" class="text-emerald-500 transition-all duration-1000" stroke-dasharray="377" stroke-dashoffset="0"></circle>
+                    </svg>
+                    <div id="stretch-timer" class="absolute inset-0 flex items-center justify-center text-4xl font-mono font-black text-white">00</div>
+                </div>
+                <div class="grid grid-cols-2 gap-4 mt-12">
+                    <button onclick="skipStretchStep()" class="py-4 bg-white/5 rounded-2xl text-[10px] font-black uppercase text-slate-400">Passer</button>
+                    <button onclick="stopStretch()" class="py-4 bg-red-500/10 border border-red-500/20 rounded-2xl text-[10px] font-black uppercase text-red-400">Abandonner</button>
+                </div>
+            </div>
+        </section>
+        <section id="section-run" class="hidden">
+            <div class="glass p-6 rounded-3xl text-center mb-6">
+                <h3 class="text-xl font-bold text-blue-400 mb-2">Nouvelle Sortie</h3>
+                <div id="run-timer" class="text-6xl font-mono my-6 text-white">00:00:00</div>
+                
+                <div class="flex gap-4">
+                    <button onclick="toggleRunTimer()" id="btn-run" class="flex-1 bg-blue-600 p-4 rounded-2xl font-bold uppercase tracking-widest">Lancer</button>
+                    <button onclick="stopAndSaveRun()" class="bg-slate-800 p-4 rounded-2xl font-bold uppercase"><i data-lucide="save"></i></button>
+                </div>
+            </div>
+
+            <div class="glass p-4 rounded-2xl">
+                <label class="text-[10px] text-slate-500 uppercase ml-1">Distance (km)</label>
+                <input type="number" id="run-distance" step="0.1" placeholder="Ex: 5.2" class="w-full bg-slate-800 p-3 rounded-xl text-sm mt-1 outline-none border border-white/5">
+            </div>
+        </section>
+
+
+        <section id="section-journal" class="hidden p-4 pb-32">
+            <div class="flex justify-between items-center mb-6 bg-slate-900/80 p-4 rounded-3xl border border-slate-800 sticky top-20 z-10 shadow-xl">
+                <button onclick="changeJournalDay(1)" class="w-10 h-10 flex items-center justify-center bg-slate-800 hover:bg-slate-700 rounded-2xl transition-all active:scale-90">
+                    <i data-lucide="chevron-left" class="text-slate-400"></i>
+                </button>
+                
+                <div class="text-center">
+                    <h2 id="journal-current-date" class="text-sm font-black text-white uppercase tracking-tighter">Journal</h2>
+                    <p id="journal-date-subtitle" class="text-[9px] text-slate-500 uppercase tracking-widest font-bold"></p>
+                </div>
+
+                <button onclick="changeJournalDay(-1)" class="w-10 h-10 flex items-center justify-center bg-slate-800 hover:bg-slate-700 rounded-2xl transition-all active:scale-90">
+                    <i data-lucide="chevron-right" class="text-slate-400"></i>
+                </button>
+            </div>
+
+            <div id="journal-container"></div>
+        </section>
+
+
+        <section id="section-musique" class="hidden p-4">
+            <div class="glass p-6 rounded-3xl mb-6 text-center">
+                <h2 class="text-2xl font-black mb-6 flex items-center justify-center gap-2">
+                    <i data-lucide="music" class="text-violet-400"></i> MUSIQUE
+                </h2>
+
+                <div class="grid grid-cols-2 gap-3 mb-6">
+                    <div class="glass p-4 rounded-3xl flex flex-col items-center">
+                        <p class="text-[10px] text-slate-500 uppercase font-bold mb-2">Métronome</p>
+                        <div class="flex items-center gap-4 mb-2">
+                            <button onclick="updateBpm(-5)" class="w-8 h-8 rounded-full bg-white/10">-</button>
+                            <span id="bpm-display" class="text-2xl font-black text-violet-400">120</span>
+                            <button onclick="updateBpm(5)" class="w-8 h-8 rounded-full bg-white/10">+</button>
+                        </div>
+                        <input type="range" id="bpm-slider" min="40" max="220" value="120" oninput="syncBpm(this.value)" class="w-full mb-4">
+                        <button id="btn-metronome" onclick="toggleMetronome()" class="w-full py-2 bg-violet-600 rounded-xl text-xs font-bold uppercase">Start</button>
+                    </div>
+
+                    <div class="glass p-4 rounded-3xl flex flex-col items-center justify-center relative overflow-hidden">
+                        <p class="text-[10px] text-slate-500 uppercase font-bold mb-2">Accordeur</p>
+                        
+                        <div id="tuner-note" class="text-4xl font-black text-white">--</div>
+                        
+                        <div class="w-full h-1 bg-white/10 rounded-full mt-4 relative">
+                            <div class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-1 h-3 bg-emerald-500 rounded-full"></div>
+                            <div id="tuner-needle" class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-2 h-2 bg-white rounded-full transition-all duration-100 shadow-[0_0_10px_white]"></div>
+                        </div>
+
+                        <div id="tuner-status" class="text-[9px] text-slate-500 uppercase mt-4">Micro éteint</div>
+                        <button onclick="toggleTuner()" id="btn-tuner" class="mt-4 w-full py-2 bg-white/5 border border-white/10 rounded-xl text-xs font-bold uppercase">Activer</button>
+                    </div>
+                </div>
+                <div id="music-setup">
+                    <p class="text-[10px] text-slate-500 uppercase font-bold mb-4">Choisir un instrument</p>
+                    <div class="grid grid-cols-2 gap-3 mb-6">
+                        <button onclick="startMusicSession('Piano')" class="glass p-4 rounded-2xl hover:border-violet-500 transition-all flex flex-col items-center gap-2">
+                            <i data-lucide="piano" class="w-6 h-6 text-violet-400"></i>
+                            <span class="text-xs font-bold">Piano</span>
+                        </button>
+                        
+                        <button onclick="startMusicSession('Clarinette')" class="glass p-4 rounded-2xl hover:border-violet-500 transition-all flex flex-col items-center gap-2">
+                            <i data-lucide="music-2" class="w-6 h-6 text-blue-400"></i>
+                            <span class="text-xs font-bold">Clarinette</span>
+                        </button>
+
+                        <button onclick="startMusicSession('Saxophone')" class="glass p-4 rounded-2xl hover:border-violet-500 transition-all flex flex-col items-center gap-2">
+                            <i data-lucide="music" class="w-6 h-6 text-orange-400"></i>
+                            <span class="text-xs font-bold">Saxophone</span>
+                        </button>
+
+                        <button onclick="startMusicSession('Flûte')" class="glass p-4 rounded-2xl hover:border-violet-500 transition-all flex flex-col items-center gap-2">
+                            <i data-lucide="wind" class="w-6 h-6 text-emerald-400"></i>
+                            <span class="text-xs font-bold">Flûte</span>
+                        </button>
+
+                        <button onclick="startMusicSession('Autre')" class="glass p-4 rounded-2xl col-span-2 hover:border-slate-500 transition-all flex flex-col items-center gap-2">
+                            <i data-lucide="more-horizontal" class="w-6 h-6 text-slate-400"></i>
+                            <span class="text-xs font-bold">Autre</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div id="music-active" class="hidden">
+                    <p id="active-instrument-name" class="text-violet-400 font-black uppercase tracking-widest mb-2"></p>
+                    <div class="text-5xl font-mono font-black text-white mb-8" id="music-timer">00:00</div>
+                    
+                    <button onclick="stopMusicSession()" class="w-full bg-red-500/20 border border-red-500/50 text-red-400 py-4 rounded-2xl font-bold uppercase tracking-widest active:scale-95 transition-all">
+                        Terminer la session
+                    </button>
+                </div>
+            </div>
+        </section>
+
+
+            <section id="section-stats" class="hidden">
+                <h2 class="text-xl font-bold mb-6 text-white flex items-center gap-2">
+                    <i data-lucide="trending-up" class="text-violet-500"></i> Analyse Performance
+                </h2>
+
+                <div class="glass p-5 rounded-3xl mb-6 border border-white/5">
+                    <div class="flex justify-between items-center mb-6">
+                        <p class="text-[10px] text-slate-500 uppercase font-bold tracking-widest">Force Statique</p>
+                        <select id="stat-finger-filter" onchange="updateStatsDashboard()" class="bg-slate-800 text-[10px] rounded-lg px-2 py-1 outline-none border border-white/10 text-slate-400">
+                            <option value="all">Global</option>
+                            <option value="10">10 Doigts</option>
+                            <option value="9">9 Doigts</option>
+                            <option value="8">8 Doigts</option>
+                            <option value="7">7 Doigts</option>
+                            <option value="6">6 Doigts</option>
+                            <option value="5">5 Doigts</option>
+                            <option value="4">4 Doigts</option>
+                            <option value="3">3 Doigts</option>
+                            <option value="2">2 Doigts</option>
+                            <option value="1">1 Doigt</option>
+                        </select>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-6 relative mb-6">
+                        <div class="relative">
+                            <p class="text-[9px] text-slate-500 uppercase mb-1">Doigts (Deadhang)</p>
+                            <p id="stat-total-hang" class="text-2xl font-black text-blue-400 tracking-tight">0s</p>
+                            <p class="text-[8px] text-slate-600 uppercase mt-1">Sous tension</p>
+                        </div>
+
+                        <div class="absolute left-1/2 top-1 bottom-1 w-px bg-white/5"></div>
+
+                        <div class="pl-4">
+                            <p class="text-[9px] text-slate-500 uppercase mb-1">Bras (Blocage)</p>
+                            <p id="stat-total-arms90" class="text-2xl font-black text-indigo-400 tracking-tight">0s</p>
+                            <p class="text-[8px] text-slate-600 uppercase mt-1">Maintien total</p>
+                        </div>
+                    </div>
+
+                    <div class="mt-4 pt-4 border-t border-white/5">
+                        <p class="text-[9px] text-slate-500 uppercase font-bold mb-3 text-center">Équilibre de Force (Droit vs Gauche)</p>
+                        <div class="h-32 w-full">
+                            <canvas id="armBalanceChart"></canvas>
+                        </div>
+                        <div id="arm-ratio-info" class="text-[8px] text-center text-slate-500 mt-2 uppercase tracking-widest"></div>
+                    </div>
+                </div>
+                
+
+            <div class="grid grid-cols-2 gap-4 mb-8">
+                <div class="glass p-4 rounded-2xl border-l-4 border-violet-500">
+                    <p class="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Volume Mensuel</p>
+                    <p id="stat-total-reps" class="text-2xl font-bold text-white">0</p>
+                    <p class="text-[9px] text-violet-400">tractions cumulées</p>
+                </div>
+                <div class="glass p-4 rounded-2xl border-l-4 border-blue-500">
+                    <p class="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Vitesse Moyenne</p>
+                    <p id="stat-avg-speed" class="text-2xl font-bold text-white">0s</p>
+                    <p class="text-[9px] text-blue-400">par répétition</p>
+                </div>
+            </div>
+            <div class="grid grid-cols-2 gap-4 mb-6">
+                <div class="glass p-4 rounded-2xl">
+                    <p class="text-[10px] text-slate-500 uppercase font-bold">Distance Totale</p>
+                    <p id="stat-run-total-dist" class="text-3xl font-bold text-indigo-400">0km</p>
+                </div>
+                <div class="glass p-4 rounded-2xl">
+                    <p class="text-[10px] text-slate-500 uppercase font-bold">Sorties / mois</p>
+                    <p id="stat-run-freq" class="text-3xl font-bold text-emerald-400">0</p>
+                </div>
+            </div>
+            
+
+            <div class="grid grid-cols-2 gap-4 mb-6">
+                <div class="glass p-4 rounded-2xl">
+                    <span class="text-xs text-slate-400 uppercase">Musique</span>
+                    <div id="stat-music-total" class="text-xl font-bold text-blue-400">0 min</div>
+                </div>
+                <div class="glass p-4 rounded-2xl">
+                    <span class="text-xs text-slate-400 uppercase">Étirement</span>
+                    <div id="stat-stretch-total" class="text-xl font-bold text-emerald-400">0 min</div>
+                </div>
+            </div>
+
+            
+
+            <div class="bg-slate-800/50 p-4 rounded-xl mb-6 border border-slate-700">
+                <p class="text-[10px] uppercase tracking-widest text-slate-500 mb-3">Filtres d'affichage</p>
+                <div class="flex flex-wrap gap-4 items-end">
+                    <div class="flex-1 min-w-[120px]">
+                        <label class="block text-[10px] text-slate-400 mb-1">Dernières séances</label>
+                        <select id="stats-limit" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs text-white outline-none focus:border-violet-500">
+                            <option value="10">10 dernières</option>
+                            <option value="20">20 dernières</option>
+                            <option value="50">50 dernières</option>
+                            <option value="all" selected>Tout voir</option>
+                        </select>
+                    </div>
+
+                    <div class="flex-[2] min-w-[200px] flex gap-2">
+                        <div class="flex-1">
+                            <label class="block text-[10px] text-slate-400 mb-1">Du</label>
+                            <input type="date" id="stats-start" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs text-white">
+                        </div>
+                        <div class="flex-1">
+                            <label class="block text-[10px] text-slate-400 mb-1">Au</label>
+                            <input type="date" id="stats-end" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs text-white">
+                        </div>
+                    </div>
+
+                    <div class="flex gap-2 w-full mt-2 sm:mt-0 sm:w-auto">
+                        <button onclick="updateStatsDashboard()" class="flex-1 sm:flex-none bg-violet-600 hover:bg-violet-500 text-white text-[10px] font-bold uppercase px-4 py-2 rounded-lg transition-colors">
+                            Entrer
+                        </button>
+                        <button onclick="resetGraphFilters()" class="flex-1 sm:flex-none bg-slate-700 hover:bg-red-500/20 hover:text-red-400 text-slate-300 text-[10px] font-bold uppercase px-4 py-2 rounded-lg transition-all">
+                            Effacer
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+
+
+            
+
+
+            <div class="glass p-4 rounded-3xl mb-6">
+                <div class="flex justify-between items-center mb-4">
+                    <button onclick="changeChart(-1)" class="p-2 hover:bg-white/10 rounded-full transition-colors">
+                        <i data-lucide="chevron-left" class="text-slate-400"></i>
+                    </button>
+                    
+                    <div class="flex flex-col items-center text-center">
+                        <p id="chart-title" class="text-[10px] text-slate-500 uppercase font-bold tracking-widest">
+                            Évolution du Ressenti
+                        </p>
+                        <div id="week-nav" class="hidden flex items-center gap-3 mt-1">
+                            <button onclick="changeWeek(-1)" class="p-1 hover:text-violet-400 text-slate-500 transition-colors">
+                                <i data-lucide="arrow-left" class="w-4 h-4"></i>
+                            </button>
+                            <span id="radar-period-title" class="text-[11px] text-violet-400 font-medium italic">Cette semaine</span>
+                            <button onclick="changeWeek(1)" class="p-1 hover:text-violet-400 text-slate-500 transition-colors">
+                                <i data-lucide="arrow-right" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <button onclick="changeChart(1)" class="p-2 hover:bg-white/10 rounded-full transition-colors">
+                        <i data-lucide="chevron-right" class="text-slate-400"></i>
+                    </button>
+                </div>
+
+                <div class="relative min-h-[350px] w-full">
+                    <div id="wrapper-mainChart" class="chart-wrapper w-full h-[350px] flex items-center justify-center"><canvas id="mainChart"></canvas></div>
+                    <div id="wrapper-runChart" class="chart-wrapper hidden w-full h-[350px] flex items-center justify-center"><canvas id="runChart"></canvas></div>
+                    <div id="wrapper-statsChart" class="chart-wrapper hidden w-full h-[350px] flex items-center justify-center"><canvas id="statsChart"></canvas></div>
+                    <div id="wrapper-blocEvolutionChart" class="chart-wrapper hidden w-full h-[350px] flex items-center justify-center"><canvas id="blocEvolutionChart"></canvas></div>
+                    <div id="wrapper-voieEvolutionChart" class="chart-wrapper hidden w-full h-[350px] flex items-center justify-center"><canvas id="voieEvolutionChart"></canvas></div>
+                    <div id="wrapper-volumeChart" class="chart-wrapper hidden w-full h-[350px] flex items-center justify-center"><canvas id="volumeChart"></canvas></div>
+                    <div id="wrapper-fatigueChart" class="chart-wrapper hidden w-full h-[350px] flex items-center justify-center"><canvas id="fatigueChart"></canvas></div>
+                    <div id="wrapper-scatterChart" class="chart-wrapper hidden w-full h-[350px] flex items-center justify-center"><canvas id="scatterChart"></canvas></div>
+                    <div id="wrapper-radarChart" class="chart-wrapper hidden w-full h-[350px] flex items-center justify-center">
+                        <div style="width: 100%; max-width: 400px; height: 100%;">
+                            <canvas id="radarChart"></canvas>
+                        </div>
+                    </div>
+                    <div id="wrapper-radarChart2" class="chart-wrapper hidden w-full h-[350px] flex items-center justify-center">
+                        <div style="width: 100%; max-width: 400px; height: 100%;">
+                            <canvas id="radarChart2"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            
+            <div class="mb-4 px-1">
+                <div class="glass flex items-center p-3 rounded-2xl border border-white/5">
+                    <i data-lucide="search" class="text-slate-500 w-4 h-4 mr-2"></i>
+                    <input type="text" id="log-search" oninput="renderLogs()" 
+                        placeholder="Rechercher une date (ex: 05/02)..." 
+                        class="bg-transparent text-xs text-white outline-none w-full">
+                </div>
+            </div>
+            <div class="flex gap-2 mb-4 overflow-x-auto pb-2 no-scrollbar">
+                <button onclick="renderLogs('all')" class="text-[10px] bg-slate-800 px-3 py-1 rounded-full border border-white/10">Tout</button>
+                <button onclick="renderLogs('Suspension')" class="text-[10px] bg-slate-800 px-3 py-1 rounded-full border border-white/10">Suspension</button>
+                <button onclick="renderLogs('Pyramide Tractions')" class="text-[10px] bg-slate-800 px-3 py-1 rounded-full border border-white/10">Pyramide</button>
+                <button onclick="renderLogs('Tractions')" class="text-[10px] bg-slate-800 px-3 py-1 rounded-full border border-white/10">Tractions</button>
+                <button onclick="renderLogs('Bras 90°')" class="text-[10px] bg-slate-800 px-3 py-1 rounded-full border border-white/10">Bras</button>
+                <button onclick="renderLogs('Course')" class="text-[10px] bg-slate-800 px-3 py-1 rounded-full border border-white/10">Course</button>
+                <button onclick="renderLogs('Musique')" class="text-[10px] bg-slate-800 px-3 py-1 rounded-full border border-white/10">Musique</button>
+                <button onclick="renderLogs('Étirement')" class="text-[10px] bg-slate-800 px-3 py-1 rounded-full border border-white/10">Zen</button>
+                <button onclick="renderLogs('Escalade')" class="text-[10px] bg-slate-800 px-3 py-1 rounded-full border border-white/10">Escalade</button>
+            </div>
+            <h3 class="text-xs font-bold text-slate-500 uppercase mb-4 tracking-widest">Dernières Séances</h3>
+            <div id="log-list" class="space-y-3">
+                </div>
+        </section>
+
+        <section id="section-objectifs" class="hidden">
+            <div class="mb-6">
+                <h2 class="text-xl font-bold">Planning & Objectifs</h2>
+                <p id="current-date-display" class="text-xs text-violet-400 font-mono mt-1"></p>
+            </div>
+
+            <div id="schedule-container" class="grid gap-3 mb-8">
+                </div>
+
+            <h3 class="text-sm font-bold text-slate-500 uppercase tracking-widest mb-4">Objectifs Long Terme</h3>
+            <div id="goals-container" class="grid gap-4">
+                </div>
+        </section>
+        <section id="section-escalade" class="hidden p-4 space-y-6">
+            <div id="climb-setup" class="glass p-6 rounded-3xl border border-white/10">
+                <h2 class="text-xl font-black mb-4 uppercase tracking-tighter">Nouvelle Séance</h2>
+                <div class="grid grid-cols-2 gap-4">
+                    <button onclick="startClimb('Bloc')" class="p-4 bg-slate-800 rounded-2xl border border-white/5 hover:border-violet-500 transition-all text-center">
+                        <span class="block text-2xl mb-1">🧗</span>
+                        <span class="font-bold text-sm">Bloc</span>
+                    </button>
+                    <button onclick="startClimb('Voie')" class="p-4 bg-slate-800 rounded-2xl border border-white/5 hover:border-violet-500 transition-all text-center">
+                        <span class="block text-2xl mb-1">🚠</span>
+                        <span class="font-bold text-sm">Voie</span>
+                    </button>
+                </div>
+            </div>
+
+            <div id="climb-active" class="hidden space-y-4">
+                <div class="flex justify-between items-center bg-slate-900/80 p-4 rounded-2xl border border-white/5">
+                    <span id="climb-type-display" class="font-black text-violet-400 uppercase text-xs tracking-widest">BLOC</span>
+                    <div class="flex items-center gap-2">
+                        <input type="number" id="climb-duration-input" placeholder="0" class="w-12 bg-transparent border-b border-violet-500 text-center text-sm text-white outline-none">
+                        <span class="text-[10px] text-slate-500 uppercase">min</span>
+                    </div>
+                </div>
+
+                <div class="glass p-4 rounded-3xl border border-white/10 space-y-4">
+                    <div class="flex items-center justify-between bg-white/5 p-2 rounded-xl">
+                        <span class="text-[10px] font-bold text-slate-400 uppercase ml-2">Résultat ?</span>
+                        <div class="flex gap-2">
+                            <button onclick="setClimbStatus(true)" id="btn-success" class="px-4 py-1 rounded-lg bg-emerald-500/20 text-emerald-500 border border-emerald-500/50 text-xs font-bold transition-all">OUI</button>
+                            <button onclick="setClimbStatus(false)" id="btn-fail" class="px-4 py-1 rounded-lg bg-slate-800 text-slate-500 text-xs font-bold transition-all">NON</button>
+                        </div>
+                    </div>
+
+                    <div>
+                        <p class="text-[10px] font-bold text-slate-500 uppercase mb-3 px-1">Difficulté</p>
+                        <div id="climb-levels-grid" class="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
+                            </div>
+                    </div>
+
+                    <div class="flex justify-between items-center bg-white/5 p-3 rounded-xl">
+                        <span class="text-[10px] font-bold text-slate-400 uppercase">Ressenti (1-5)</span>
+                        <input type="range" id="climb-effort" min="1" max="5" value="3" class="w-1/2 accent-violet-500">
+                    </div>
+
+                    <button onclick="addClimbLap()" class="w-full py-4 bg-white text-black rounded-2xl font-black text-sm uppercase italic shadow-lg active:scale-95 transition-transform">
+                        Valider l'essai
+                    </button>
+                </div>
+
+                <div id="climb-laps" class="space-y-3 mt-4 max-h-[35vh] overflow-y-auto no-scrollbar">
+                    </div>
+
+                <button onclick="finishClimbSession()" class="w-full py-4 bg-red-500/10 border border-red-500/30 text-red-500 rounded-3xl font-black uppercase text-[10px] tracking-[0.2em] hover:bg-red-500/20 transition-colors">
+                    Terminer la séance
+                </button>
+            </div>
+        </section>
+    </main>
+
+    <nav class="fixed bottom-0 left-0 right-0 glass border-t border-white/5 px-6 py-4 
+                flex flex-nowrap overflow-x-auto no-scrollbar gap-8 items-center z-50 
+                justify-start md:justify-center">
+        
+        <button onclick="showSection('muscu')" class="flex-shrink-0 flex flex-col items-center gap-1 text-violet-500">
+            <i data-lucide="armchair" class="w-6 h-6"></i>
+            <span class="text-[10px] font-bold">Muscu</span>
+        </button>
+        
+        <button onclick="showSection('escalade')" class="flex-shrink-0 flex flex-col items-center gap-1 text-slate-400">
+            <i data-lucide="mountain" class="w-6 h-6"></i>
+            <span class="text-[10px]">Grimpe</span>
+        </button>
+
+        <button onclick="showSection('musique')" class="flex-shrink-0 flex flex-col items-center gap-1 text-slate-400">
+            <i data-lucide="music" class="w-6 h-6"></i>
+            <span class="text-[10px]">Musique</span>
+        </button>
+
+        <button onclick="showSection('run')" class="flex-shrink-0 flex flex-col items-center gap-1 text-slate-400">
+            <i data-lucide="timer" class="w-6 h-6"></i>
+            <span class="text-[10px]">Run</span>
+        </button>
+
+        <button onclick="showSection('stretching')" class="flex-shrink-0 flex flex-col items-center gap-1 text-slate-400">
+            <i data-lucide="accessibility" class="w-6 h-6"></i>
+            <span class="text-[10px]">Zen</span>
+        </button>
+
+        <button onclick="showSection('stats')" class="flex-shrink-0 flex flex-col items-center gap-1 text-slate-400">
+            <i data-lucide="bar-chart-3" class="w-6 h-6"></i>
+            <span class="text-[10px]">Stats</span>
+        </button>
+
+        <button onclick="showSection('journal')" class="flex-shrink-0 flex flex-col items-center gap-1 text-slate-400">
+            <i data-lucide="book-open" class="w-6 h-6"></i>
+            <span class="text-[10px]">Journal</span>
+        </button>
+    </nav>
+    
+    
+
+    <script src="https://unpkg.com/dexie/dist/dexie.js"></script>
+    <script src="db.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
