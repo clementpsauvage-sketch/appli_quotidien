@@ -120,6 +120,7 @@ function showSection(id) {
         updateGoalsDashboard();
     }
     if (id === 'journal') renderJournal();
+    if (id === 'sommeil') updateSleepChart();
 }
 
 // --- VARIABLES GLOBALES JOURNAL ---
@@ -4087,4 +4088,158 @@ function resetGraphFilters() {
     
     // 3. On relance la mise à jour des graphiques
     updateStatsDashboard();
+}
+
+
+async function saveSleep() {
+    const start = document.getElementById('sleep-start').value;
+    const end = document.getElementById('sleep-end').value;
+
+    if (!start || !end) return alert("Veuillez remplir les deux horaires");
+
+    const [hStart, mStart] = start.split(':').map(Number);
+    const [hEnd, mEnd] = end.split(':').map(Number);
+
+    let startDate = new Date();
+    startDate.setHours(hStart, mStart, 0);
+    
+    let endDate = new Date();
+    endDate.setHours(hEnd, mEnd, 0);
+
+    if (endDate < startDate) {
+        endDate.setDate(endDate.getDate() + 1);
+    }
+
+    const diffMs = endDate - startDate;
+    const durationHours = (diffMs / (1000 * 60 * 60)).toFixed(2);
+
+    const sleepData = {
+        type: 'Sommeil',
+        duration: parseFloat(durationHours),
+        start: start,
+        end: end,
+        timestamp: new Date().toISOString(), // Date du réveil
+        note: `Nuit de ${durationHours}h (${start} - ${end})`
+    };
+
+    await DB.saveLog(sleepData);
+    
+    // Reset les champs
+    document.getElementById('sleep-start').value = "";
+    document.getElementById('sleep-end').value = "";
+    
+    alert("Nuit enregistrée !");
+    updateSleepChart();
+}
+
+async function updateSleepChart() {
+    const ctx = document.getElementById('sleepChart').getContext('2d');
+    const period = document.getElementById('sleep-period').value;
+    const avgDisplay = document.getElementById('sleep-avg');
+    
+    let logs = await DB.getLogs();
+    let sleepLogs = logs.filter(l => l.type === 'Sommeil')
+                        .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+
+    if (period !== 'all') {
+        sleepLogs = sleepLogs.slice(-parseInt(period));
+    }
+
+    if (sleepLogs.length === 0) {
+        if (window.mySleepChart) window.mySleepChart.destroy();
+        avgDisplay.innerText = "--h--";
+        return;
+    }
+
+    const totalHours = sleepLogs.reduce((acc, log) => acc + parseFloat(log.duration), 0);
+    const avg = totalHours / sleepLogs.length;
+    avgDisplay.innerText = `${avg.toFixed(1)}h`;
+
+    if (window.mySleepChart) window.mySleepChart.destroy();
+
+    const backgroundZones = {
+        id: 'backgroundZones',
+        beforeDraw: (chart) => {
+            const {ctx, chartArea, scales: {y}} = chart;
+            const zones = [
+                { yStart: 0, yEnd: 4, color: 'rgba(239, 68, 68, 0.25)' },   // Critique - Rouge plus vif
+                { yStart: 4, yEnd: 6, color: 'rgba(249, 115, 22, 0.2)' },    // Insuffisant - Orange
+                { yStart: 6, yEnd: 7.5, color: 'rgba(234, 179, 8, 0.15)' }, // Moyen - Jaune
+                { yStart: 7.5, yEnd: 9, color: 'rgba(34, 197, 94, 0.2)' },  // Bon - Vert
+                { yStart: 9, yEnd: 12, color: 'rgba(168, 85, 247, 0.25)' }  // Excellent - Violet
+            ];
+            zones.forEach(zone => {
+                const top = y.getPixelForValue(zone.yEnd);
+                const bottom = y.getPixelForValue(zone.yStart);
+                ctx.fillStyle = zone.color;
+                ctx.fillRect(chartArea.left, top, chartArea.width, bottom - top);
+            });
+        }
+    };
+
+    window.mySleepChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            // Pour placer le point "entre", on crée des labels qui sont les jours de transition
+            labels: sleepLogs.map(l => {
+                const d = new Date(l.timestamp);
+                return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+            }),
+            datasets: [{
+                data: sleepLogs.map(l => l.duration),
+                borderColor: '#ffffff', // Ligne blanche pour mieux ressortir sur les couleurs
+                backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                fill: false,
+                tension: 0.4,
+                pointRadius: 6,
+                pointBackgroundColor: '#8b5cf6', // Point violet
+                pointBorderColor: '#fff',
+                pointBorderWidth: 2,
+                zIndex: 10
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 12,
+                    zIndex: 5,
+                    grid: { color: 'rgba(255,255,255,0.1)' },
+                    ticks: { color: '#f8fafc', font: { weight: 'bold' } }
+                },
+                x: {
+                    // L'offset true combiné au grid offset false place le point entre les lignes de grille
+                    offset: true, 
+                    grid: {
+                        display: true,
+                        color: 'rgba(255,255,255,0.2)', // Grille plus visible
+                        drawTicks: true,
+                        offset: false // Force la ligne de grille à être sur l'étiquette, pas sur le point
+                    },
+                    ticks: {
+                        color: '#94a3b8',
+                        font: { size: 10 },
+                        align: 'start', // Décale le texte vers la gauche pour qu'il soit "sous la ligne"
+                        backdropPadding: 0
+                    }
+                }
+            },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: '#1e293b',
+                    titleColor: '#fff',
+                    bodyColor: '#fff',
+                    displayColors: false,
+                    callbacks: {
+                        title: (items) => `Nuit du réveil : ${items[0].label}`,
+                        label: (context) => `Durée : ${context.parsed.y}h`
+                    }
+                }
+            }
+        },
+        plugins: [backgroundZones]
+    });
 }

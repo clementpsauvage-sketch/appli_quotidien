@@ -576,6 +576,46 @@
                 </button>
             </div>
         </section>
+
+        <section id="section-sommeil" class="hidden">
+            <h2 class="text-xl font-semibold mb-6 flex items-center gap-2">
+                <i data-lucide="moon" class="text-indigo-400"></i> Sommeil
+            </h2>
+
+            <div class="glass p-6 rounded-3xl mb-6">
+                <div class="grid grid-cols-2 gap-4 mb-4">
+                    <div>
+                        <label class="text-[10px] text-slate-500 uppercase ml-1">Coucher</label>
+                        <input type="time" id="sleep-start" class="w-full bg-slate-800 p-3 rounded-xl text-sm mt-1 outline-none text-white">
+                    </div>
+                    <div>
+                        <label class="text-[10px] text-slate-500 uppercase ml-1">Réveil</label>
+                        <input type="time" id="sleep-end" class="w-full bg-slate-800 p-3 rounded-xl text-sm mt-1 outline-none text-white">
+                    </div>
+                </div>
+                <button onclick="saveSleep()" class="w-full bg-indigo-600 hover:bg-indigo-500 p-4 rounded-2xl font-bold transition-all">
+                    ENREGISTRER LA NUIT
+                </button>
+            </div>
+
+            <div class="glass p-6 rounded-3xl">
+                <div class="flex justify-between items-center mb-6">
+                    <div>
+                        <p class="text-[10px] text-slate-500 uppercase">Moyenne</p>
+                        <p id="sleep-avg" class="text-2xl font-bold text-indigo-400">--h--</p>
+                    </div>
+                    <select id="sleep-period" onchange="updateSleepChart()" class="bg-slate-800 text-xs border-none rounded-lg p-2 outline-none text-slate-300">
+                        <option value="7">7 derniers jours</option>
+                        <option value="30">30 derniers jours</option>
+                        <option value="all">Tout l'historique</option>
+                    </select>
+                </div>
+                
+                <div class="h-64 w-full">
+                    <canvas id="sleepChart"></canvas>
+                </div>
+            </div>
+        </section>
     </main>
 
     <nav class="fixed bottom-0 left-0 right-0 glass border-t border-white/5 px-6 py-4 
@@ -605,6 +645,11 @@
         <button onclick="showSection('stretching')" class="flex-shrink-0 flex flex-col items-center gap-1 text-slate-400">
             <i data-lucide="accessibility" class="w-6 h-6"></i>
             <span class="text-[10px]">Zen</span>
+        </button>
+
+        <button onclick="showSection('sommeil')" class="flex-shrink-0 flex flex-col items-center gap-1 text-slate-400">
+            <i data-lucide="moon" class="w-6 h-6"></i>
+            <span class="text-[10px]">Sommeil</span>
         </button>
 
         <button onclick="showSection('stats')" class="flex-shrink-0 flex flex-col items-center gap-1 text-slate-400">
