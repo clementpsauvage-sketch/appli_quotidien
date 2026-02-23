@@ -19,6 +19,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Lancer le premier affichage
     // 2. On lance le dashboard qui va lire ces dates
     await updateGoalsDashboard();
+
+    // --- RÉCUPÉRATION ESCALADE ---
+    // Cette fonction vérifie si une séance était en cours dans le LocalStorage
+    restoreClimbSession();
+
     // VERIFICATION CHRONO MUSIQUE EN COURS
     // RÉCUPÉRATION COURSE
     const savedIsRunning = localStorage.getItem('run_isRunning') === 'true';
@@ -142,7 +147,7 @@ async function renderJournal() {
 
     const allLogs = await DB.getLogs();
     
-    // Groupement par date LOCALE (évite le bug du 17/18)
+    // 1. Groupement par date
     const groups = allLogs.reduce((acc, log) => {
         const d = new Date(log.timestamp);
         const dateKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -151,10 +156,16 @@ async function renderJournal() {
         return acc;
     }, {});
 
-    // On transforme en tableau trié par date (le plus récent est l'index 0)
+    // 2. Transformation en tableau et TRI
     groupedLogsByDay = Object.keys(groups)
-        .sort((a, b) => b.localeCompare(a))
-        .map(date => ({ date, logs: groups[date] }));
+        .sort((a, b) => b.localeCompare(a)) // Les jours les plus récents en premier
+        .map(date => {
+            // --- AJOUT DU TRI CHRONOLOGIQUE À L'INTÉRIEUR DU JOUR ---
+            // On trie les logs du matin (bas timestamp) vers le soir (haut timestamp)
+            const sortedLogs = groups[date].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+            
+            return { date, logs: sortedLogs };
+        });
 
     currentJournalIndex = 0; 
     displayJournalPage();
@@ -924,6 +935,8 @@ async function renderLogs(filter = 'all') {
 
     // 2. Filtrage (Uniquement type et recherche, pas de dates de stats !)
     let filteredLogs = logs.filter(l => {
+        if (l.type.toLowerCase() === 'sommeil') return false;
+
         const matchesType = (filter === 'all' || l.type.toLowerCase() === filter.toLowerCase());
         const formattedDate = new Date(l.timestamp).toLocaleDateString('fr-FR');
         const searchableText = [l.type, l.note, l.exercise, formattedDate, l.comment].join(' ').toLowerCase();
@@ -3946,40 +3959,60 @@ function addClimbLap() {
     const level = currentClimbSession.selectedLevel;
     const effort = document.getElementById('climb-effort').value;
     const status = isSuccess;
-    const color = currentClimbSession.selectedColor;
 
     const lap = {
         level: level,
         effort: effort,
         success: status,
+        color: currentClimbSession.selectedColor, // On stocke la couleur pour le rendu
         time: new Date().toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'})
     };
     
     currentClimbSession.laps.push(lap);
+    saveClimbState(); // SAUVEGARDE
+    renderClimbLapsList(); // On utilise une fonction dédiée pour l'affichage
+}
+
+// Nouvelle fonction pour gérer l'affichage de la liste
+function renderClimbLapsList() {
+    const container = document.getElementById('climb-laps');
     
-    // Affichage dans la liste de la session active
-    const lapHTML = `
-        <div class="flex justify-between items-center p-4 glass rounded-2xl border-l-4 mb-2 animate-in fade-in slide-in-from-right-4 duration-300" 
-                style="border-left-color: ${status ? color : '#ef4444'}">
+    container.innerHTML = currentClimbSession.laps.map((lap, index) => `
+        <div class="flex justify-between items-center p-4 glass rounded-2xl border-l-4 mb-2" 
+            style="border-left-color: ${lap.success ? lap.color : '#ef4444'}">
             <div class="flex items-center gap-3">
-                <span class="text-xl">${status ? '✅' : '❌'}</span>
+                <span class="text-xl">${lap.success ? '✅' : '❌'}</span>
                 <div>
-                    <span class="block text-white font-bold text-sm">${currentClimbSession.type} ${level}</span>
+                    <span class="block text-white font-bold text-sm">${currentClimbSession.type} ${lap.level}</span>
                     <span class="text-[10px] text-slate-500">${lap.time}</span>
                 </div>
             </div>
-            <div class="flex flex-col items-end gap-1">
-                <div class="flex gap-1">
-                    ${Array.from({length: 5}).map((_, i) => `
-                        <div class="w-1.5 h-1.5 rounded-full ${i < effort ? 'bg-violet-500' : 'bg-slate-700'}"></div>
-                    `).join('')}
+            <div class="flex items-center gap-4">
+                <div class="flex flex-col items-end gap-1">
+                    <div class="flex gap-1">
+                        ${Array.from({length: 5}).map((_, i) => `
+                            <div class="w-1.5 h-1.5 rounded-full ${i < lap.effort ? 'bg-violet-500' : 'bg-slate-700'}"></div>
+                        `).join('')}
+                    </div>
                 </div>
-                <span class="text-[9px] text-slate-500 uppercase">Effort ${effort}/5</span>
+                <button onclick="removeClimbLap(${index})" class="p-2 text-slate-500 hover:text-red-400 transition-colors">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
             </div>
         </div>
-    `;
+    `).reverse().join(''); // .reverse() pour avoir le dernier en haut
     
-    document.getElementById('climb-laps').insertAdjacentHTML('afterbegin', lapHTML);
+    if (window.lucide) lucide.createIcons();
+}
+
+// Modifier aussi le reset pour vider la mémoire
+function resetClimbUI() {
+    localStorage.removeItem('activeClimbSession'); // ON VIDE LE LOCALSTORAGE
+    document.getElementById('climb-setup').classList.remove('hidden');
+    document.getElementById('climb-active').classList.add('hidden');
+    document.getElementById('climb-laps').innerHTML = '';
+    document.getElementById('climb-duration-input').value = '';
+    currentClimbSession = { laps: [] }; 
 }
 
 async function finishClimbSession() {
@@ -4006,12 +4039,35 @@ async function finishClimbSession() {
     showMoodSelector(pendingData);
 }
 
-function resetClimbUI() {
-    document.getElementById('climb-setup').classList.remove('hidden');
-    document.getElementById('climb-active').classList.add('hidden');
-    document.getElementById('climb-laps').innerHTML = '';
-    document.getElementById('climb-duration-input').value = '';
-    currentClimbSession.laps = [];
+
+
+// Fonction pour sauvegarder l'état actuel dans le téléphone/navigateur
+function saveClimbState() {
+    localStorage.setItem('activeClimbSession', JSON.stringify(currentClimbSession));
+}
+
+// À appeler au chargement de ton application (ex: dans window.onload)
+function restoreClimbSession() {
+    const saved = localStorage.getItem('activeClimbSession');
+    if (saved) {
+        currentClimbSession = JSON.parse(saved);
+        
+        // On remet l'interface dans l'état "Actif"
+        document.getElementById('climb-setup').classList.add('hidden');
+        document.getElementById('climb-active').classList.remove('hidden');
+        document.getElementById('climb-type-display').innerText = currentClimbSession.type;
+        
+        renderDifficultyButtons(currentClimbSession.type);
+        renderClimbLapsList(); // On rafraîchit la liste des essais
+    }
+}
+
+function removeClimbLap(index) {
+    if (confirm("Supprimer cet essai ?")) {
+        currentClimbSession.laps.splice(index, 1); // Retire l'élément du tableau
+        saveClimbState(); // Sauvegarde la modification
+        renderClimbLapsList(); // Rafraîchit l'affichage
+    }
 }
 
 
@@ -4097,39 +4153,45 @@ async function saveSleep() {
 
     if (!start || !end) return alert("Veuillez remplir les deux horaires");
 
+    // Calcul de la durée
     const [hStart, mStart] = start.split(':').map(Number);
     const [hEnd, mEnd] = end.split(':').map(Number);
-
     let startDate = new Date();
     startDate.setHours(hStart, mStart, 0);
-    
     let endDate = new Date();
     endDate.setHours(hEnd, mEnd, 0);
+    if (endDate < startDate) endDate.setDate(endDate.getDate() + 1);
 
-    if (endDate < startDate) {
-        endDate.setDate(endDate.getDate() + 1);
-    }
+    const durationHours = ((endDate - startDate) / (1000 * 60 * 60)).toFixed(2);
 
-    const diffMs = endDate - startDate;
-    const durationHours = (diffMs / (1000 * 60 * 60)).toFixed(2);
+    // ON DEMANDE LE COMMENTAIRE ICI (Avant l'enregistrement)
+    const quickComment = prompt("Comment s'est passée votre nuit ? (Qualité, réveil...)", "");
 
     const sleepData = {
         type: 'Sommeil',
         duration: parseFloat(durationHours),
         start: start,
         end: end,
-        timestamp: new Date().toISOString(), // Date du réveil
-        note: `Nuit de ${durationHours}h (${start} - ${end})`
+        timestamp: new Date().toISOString(),
+        note: `Nuit de ${durationHours}h (${start} - ${end})`,
+        comment: quickComment || "" // On l'ajoute directement ici
     };
 
-    await DB.saveLog(sleepData);
-    
-    // Reset les champs
-    document.getElementById('sleep-start').value = "";
-    document.getElementById('sleep-end').value = "";
-    
-    alert("Nuit enregistrée !");
-    updateSleepChart();
+    try {
+        await DB.saveLog(sleepData);
+        
+        // Reset Interface
+        document.getElementById('sleep-start').value = "";
+        document.getElementById('sleep-end').value = "";
+        
+        alert("Nuit enregistrée !");
+        
+        if (typeof updateSleepChart === 'function') updateSleepChart();
+        if (typeof renderLogs === 'function') renderLogs(); 
+    } catch (e) {
+        console.error(e);
+        alert("Erreur lors de la sauvegarde.");
+    }
 }
 
 async function updateSleepChart() {
