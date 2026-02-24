@@ -859,34 +859,58 @@ function renderStretchDetails(log) {
 }
 
 // --- MOTEUR 5 : ESCALADE ---
-
 function renderClimbingDetails(log) {
     const details = log.details || [];
-    const totalEssais = details.length; // Nombre total de tentatives
     const successes = details.filter(d => d.success).length;
-    const fails = totalEssais - successes;
+    const fails = details.filter(d => !d.success).length;
     
-    // 1. On groupe les données par difficulté
+    // 1. Groupement par difficulté avec cumul des essais et de la hauteur
     const statsByLevel = details.reduce((acc, d) => {
-        if (!acc[d.level]) acc[d.level] = { success: 0, fail: 0 };
+        if (!acc[d.level]) {
+            acc[d.level] = { 
+                success: 0, 
+                fail: 0, 
+                totalAttempts: 0,
+                levelHeight: 0 
+            };
+        }
         if (d.success) acc[d.level].success++;
         else acc[d.level].fail++;
+        
+        const att = parseInt(d.attempts || 1);
+        const h = parseFloat(d.height || 0);
+
+        acc[d.level].totalAttempts += att;
+        // On considère que la hauteur est parcourue à chaque essai (ou seulement au succès selon ta préférence)
+        // Ici, on multiplie par le nombre d'essais pour avoir le volume réel grimpé
+        acc[d.level].levelHeight += (h * att); 
+        
         return acc;
     }, {});
+
+    // Totaux séance
+    const totalEssaisSeance = Object.values(statsByLevel).reduce((sum, s) => sum + s.totalAttempts, 0);
+    const totalHeightSeance = Object.values(statsByLevel).reduce((sum, s) => sum + s.levelHeight, 0);
 
     const arkoseColors = {
         'Jaune': '#fbbf24', 'Vert': '#4ade80', 'Bleu': '#60a5fa', 
         'Rouge': '#f87171', 'Noir': '#1e293b', 'Violet': '#a855f7'
     };
 
-    // 2. Génération du résumé (ce qu'on voit tout de suite)
+    // 2. Génération des badges par niveau
     const summaryHTML = Object.entries(statsByLevel).map(([lvl, stat]) => {
         const dotColor = arkoseColors[lvl] || '#94a3b8';
+        const heightInfo = stat.levelHeight > 0 ? `<span class="text-[8px] text-sky-400/80">${stat.levelHeight}m cumulés</span>` : '';
+        
         return `
-            <div class="flex items-center gap-1 bg-white/5 px-2 py-1 rounded-full border border-white/5">
+            <div class="flex items-center gap-1 bg-white/5 px-2 py-1 rounded-lg border border-white/5">
                 <span class="w-2 h-2 rounded-full" style="background-color: ${dotColor}"></span>
                 <span class="text-[10px] font-bold text-white">${lvl}</span>
-                <span class="text-[9px] text-slate-400 ml-1">${stat.success}✅ / ${stat.fail}❌</span>
+                <div class="flex flex-col ml-1 border-l border-white/10 pl-1.5">
+                    <span class="text-[9px] text-emerald-400 font-medium">${stat.success} ✅</span>
+                    <span class="text-[8px] text-slate-400">${stat.totalAttempts} essai${stat.totalAttempts > 1 ? 's' : ''}</span>
+                    ${heightInfo}
+                </div>
             </div>
         `;
     }).join('');
@@ -895,25 +919,28 @@ function renderClimbingDetails(log) {
         <div class="mt-2 space-y-3">
             <div class="flex flex-wrap items-center gap-2">
                 <div class="bg-violet-500 text-white px-2 py-0.5 rounded-full text-[10px] font-black uppercase shadow-lg shadow-violet-500/20">
-                    ${totalEssais} ESSAIS TOTAUX
+                    ${totalEssaisSeance} ESSAIS
                 </div>
+                ${totalHeightSeance > 0 ? `
+                <div class="bg-sky-600 text-white px-2 py-0.5 rounded-full text-[10px] font-black uppercase shadow-lg shadow-sky-500/20">
+                    ${totalHeightSeance.toFixed(0)} METRES
+                </div>
+                ` : ''}
                 <div class="flex items-center gap-2 text-[10px] font-bold text-slate-400 border-l border-white/10 pl-2">
                     <span class="text-emerald-400">${successes}✅</span>
                     <span class="text-red-400">${fails}❌</span>
                 </div>
             </div>
 
-            <div id="details-content-${log.id}" class="hidden-details-content mt-3 space-y-2 border-t border-white/5 pt-3">
-                <p class="text-[10px] uppercase font-black text-slate-500 mb-2 italic">Détail de la session :</p>
+            <div id="details-content-${log.id}" class="mt-3 space-y-2 border-t border-white/5 pt-3">
                 <div class="flex flex-wrap gap-2">
-                ${summaryHTML || '<span class="text-[10px] text-slate-500 italic">Aucune ascension enregistrée</span>'}
+                ${summaryHTML || '<span class="text-[10px] text-slate-500 italic">Aucune donnée</span>'}
                 </div>
-                
 
                 ${log.duration ? `
-                    <div class="flex items-center gap-2 text-slate-500 mt-2">
-                        <i data-lucide="clock" class="w-3 h-3"></i>
-                        <span class="text-[10px]">Durée totale : ${log.duration} minutes</span>
+                    <div class="flex items-center gap-2 text-slate-400 mt-2 pt-2 border-t border-white/5">
+                        <i data-lucide="clock" class="w-3 h-3 text-slate-500"></i>
+                        <span class="text-[10px] font-medium">${log.duration} minutes de session</span>
                     </div>
                 ` : ''}
             </div>
@@ -1705,9 +1732,9 @@ function renderScatterChart(logs) {
         
         // Cotations (Positions intercalées comme dans ton 1er exemple)
         '4c': 1.5, '5a': 2.0, '5b': 2.5, '5c': 3.0, 
-        '6a': 3.5, '6b': 4.0, '6c': 4.5, 
-        '7a': 5.0, '7b': 5.5, '7c': 6.0, 
-        '8a': 6.5, '8b': 7.0, '8c': 7.5
+        '6a': 3.5, '6a+':3.75, '6b': 4.0, '6b+': 4.25, '6c': 4.5, 
+        '6c+':4.75, '7a': 5.0, '7a+': 5.25, '7b': 5.5, '7b+':5.75, '7c': 6.0, 
+        '7c+':6.25, '8a': 6.5, '8a+':6.75, '8b': 7.0, '8b+':7.25,  '8c': 7.5
     };
 
     const climbLogs = logs.filter(l => l.type === 'Escalade' && l.details);
@@ -1818,54 +1845,77 @@ const voieLabels = [
     '7a', '7a+', '7b', '7b+', '7c', '7c+', '8a', '8a+', '8b', '8b+', '8c', '8c+',
     '9a', '9a+', '9b', '9b+', '9c'
 ];
+
 function renderBlocEvolutionChart(climbLogs) {
     const canvas = document.getElementById('blocEvolutionChart');
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
-
     const blocLogs = climbLogs.filter(log => log.exercise === 'Bloc');
-
-    const levelMap = {
-        'Jaune': 1, '4': 1,
-        'Vert': 2, '5a': 2, '5b': 2, '5c': 2,
-        'Bleu': 3, '6a': 3, '6a+': 3,
-        'Rouge': 4, '6b': 4, '6b+': 4, '6c': 4,
-        'Noir': 5, '6c+': 5, '7a': 5, '7a+': 5, '7b': 5,
-        'Violet': 6, '7b+': 6, '7c': 6, '8a': 6
-    };
+    const levelMap = { 'Jaune': 1, 'Vert': 2, 'Bleu': 3, 'Rouge': 4, 'Noir': 5, 'Violet': 6 };
 
     const labels = [];
     const rawSuccess = [];
     const rawProject = [];
 
-    blocLogs.forEach(log => {
-        if (!log.details || log.details.length === 0) return;
-
-        labels.push(new Date(log.timestamp).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }));
-        
+    const allMaxSuccess = blocLogs.map(log => {
         const validated = log.details.filter(d => d.success).map(d => levelMap[d.level] || 0);
-        rawSuccess.push(validated.length > 0 ? Math.max(...validated) : 0);
-        
-        const attempted = log.details.map(d => {
-            const base = levelMap[d.level] || 0;
-            const effortBonus = (6 - parseInt(d.effort)) * 0.2; 
-            return d.success ? base + effortBonus : base - 0.5;
-        });
-        rawProject.push(Math.max(...attempted));
+        return validated.length > 0 ? Math.max(...validated) : 0;
     });
 
-    // Calcul des moyennes mobiles sur 4 séances
-    const avgSuccessData = [];
-    const avgProjectData = [];
-    for (let i = 0; i < rawSuccess.length; i++) {
-        const start = Math.max(0, i - 3);
-        const windowS = rawSuccess.slice(start, i + 1);
-        const windowP = rawProject.slice(start, i + 1);
-        avgSuccessData.push(windowS.reduce((a, b) => a + b, 0) / windowS.length);
-        avgProjectData.push(windowP.reduce((a, b) => a + b, 0) / windowP.length);
-    }
+    blocLogs.forEach((log, index) => {
+        if (!log.details || log.details.length === 0) return;
+        
+        labels.push(new Date(log.timestamp).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }));
+        rawSuccess.push(allMaxSuccess[index]);
 
-    createClimbChart(ctx, 'Bloc', labels, rawSuccess, avgSuccessData, avgProjectData, 'window.myBlocChart', 7);
+        // 1. Calcul du Time Decay (basé sur l'écart de jours)
+        let timeDecay = 1;
+        if (index > 0) {
+            const daysDiff = (new Date(log.timestamp) - new Date(blocLogs[index - 1].timestamp)) / (1000 * 60 * 60 * 24);
+            // On perd ~1% par semaine d'absence (0.998^7)
+            timeDecay = Math.pow(0.998, daysDiff);
+        }
+
+        const historicalRecent = allMaxSuccess.slice(Math.max(0, index - 10), index);
+        const topRecentLevel = historicalRecent.length > 0 ? Math.max(...historicalRecent) : allMaxSuccess[index];
+
+        const potentialScores = log.details.map(d => {
+            const base = levelMap[d.level] || 0;
+            const eff = parseInt(d.effort) || 3;
+            const att = parseInt(d.attempts) || 1;
+            let score = base;
+
+            if (!d.success) {
+                if (base >= topRecentLevel - 1) {
+                    score += (eff * 0.12) + (Math.min(att, 10) * 0.06); 
+                } else {
+                    score -= (topRecentLevel - base) * 0.25;
+                }
+            } else {
+                score += (att === 1 ? 0.4 : 0.15);
+            }
+            return Math.max(0, score);
+        });
+
+        // 2. Logique de type de séance (Défi vs Volume)
+        const aTenteUnDefi = log.details.some(d => (levelMap[d.level] || 0) >= (topRecentLevel - 1));
+        const lastPotential = rawProject.length > 0 ? rawProject[rawProject.length - 1] : Math.max(...potentialScores);
+        
+        let dailyPotential;
+        if (aTenteUnDefi) {
+            dailyPotential = Math.max(...potentialScores);
+        } else {
+            // Séance de volume : on maintient le potentiel précédent (appliqué au decay)
+            dailyPotential = lastPotential;
+        }
+
+        // 3. Stabilisation finale
+        const stabilizedPotential = Math.max(dailyPotential, allMaxSuccess[index], lastPotential * timeDecay);
+        rawProject.push(stabilizedPotential);
+    });
+
+    const { avgSuccess, avgProject } = calculateMovingAverages(rawSuccess, rawProject);
+    createClimbChart(ctx, 'Bloc', labels, rawSuccess, avgSuccess, avgProject, 'window.myBlocChart', 7);
 }
 
 function renderVoieEvolutionChart(climbLogs) {
@@ -1873,53 +1923,103 @@ function renderVoieEvolutionChart(climbLogs) {
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     const voieLogs = climbLogs.filter(log => log.exercise === 'Voie');
-
-    const levelMap =  {
-    '4c': 1, '5a': 2, '5b': 3, '5c': 4,
-    '6a': 5, '6a+': 6, '6b': 7, '6b+': 8, '6c': 9, '6c+': 10,
-    '7a': 11, '7a+': 12, '7b': 13, '7b+': 14, '7c': 15, '7c+': 16,
-    '8a': 17, '8a+': 18, '8b': 19, '8b+': 20, '8c': 21, '8c+': 22,
-    '9a': 23, '9a+': 24, '9b': 25, '9b+': 26, '9c': 27
+    const levelMap = { 
+        '4c': 1, '5a': 2, '5b': 3, '5c': 4, '6a': 5, '6a+': 6, '6b': 7, '6b+': 8, '6c': 9, '6c+': 10,
+        '7a': 11, '7a+': 12, '7b': 13, '7b+': 14, '7c': 15, '7c+': 16, '8a': 17, '8a+': 18, '8b': 19, '8b+': 20, '8c': 21 
     };
+
     const labels = [];
     const rawSuccess = [];
     const rawProject = [];
 
-    voieLogs.forEach(log => {
-        if (!log.details || log.details.length === 0) return;
-        labels.push(new Date(log.timestamp).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }));
-        
+    const allMaxSuccess = voieLogs.map(log => {
         const validated = log.details.filter(d => d.success).map(d => levelMap[d.level] || 0);
-        rawSuccess.push(validated.length > 0 ? Math.max(...validated) : 0);
-        
-        const attempted = log.details.map(d => {
-            const base = levelMap[d.level] || 0;
-            const effortBonus = (6 - parseInt(d.effort)) * 0.2; 
-            return d.success ? base + effortBonus : base - 0.5;
-        });
-        rawProject.push(Math.max(...attempted));
+        return validated.length > 0 ? Math.max(...validated) : 0;
     });
 
-    const avgSuccessData = [];
-    const avgProjectData = [];
+    voieLogs.forEach((log, index) => {
+        if (!log.details || log.details.length === 0) return;
+        
+        labels.push(new Date(log.timestamp).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }));
+        rawSuccess.push(allMaxSuccess[index]);
+
+        // 1. Calcul du Time Decay
+        let timeDecay = 1;
+        if (index > 0) {
+            const daysDiff = (new Date(log.timestamp) - new Date(voieLogs[index - 1].timestamp)) / (1000 * 60 * 60 * 24);
+            timeDecay = Math.pow(0.998, daysDiff);
+        }
+
+        const historicalRecent = allMaxSuccess.slice(Math.max(0, index - 10), index);
+        const topRecentLevel = historicalRecent.length > 0 ? Math.max(...historicalRecent) : allMaxSuccess[index];
+
+        const potentialScores = log.details.map(d => {
+            const base = levelMap[d.level] || 0;
+            const eff = parseInt(d.effort) || 3;
+            const h = parseFloat(d.height) || 12;
+            const att = parseInt(d.attempts) || 1;
+            let score = base;
+            const heightBonus = (h / 12) * 0.25;
+
+            if (!d.success) {
+                if (base >= topRecentLevel - 1) {
+                    score += heightBonus + (eff * 0.15) + (Math.min(att, 5) * 0.05);
+                } else {
+                    score -= (topRecentLevel - base) * 0.25;
+                }
+            } else {
+                score += heightBonus + (att === 1 ? 0.35 : 0.1);
+            }
+            return Math.max(0, score);
+        });
+
+        // 2. Logique de type de séance
+        const aTenteUnDefi = log.details.some(d => (levelMap[d.level] || 0) >= (topRecentLevel - 1));
+        const lastPotential = rawProject.length > 0 ? rawProject[rawProject.length - 1] : Math.max(...potentialScores);
+
+        let dailyPotential;
+        if (aTenteUnDefi) {
+            dailyPotential = Math.max(...potentialScores);
+        } else {
+            dailyPotential = lastPotential;
+        }
+
+        // 3. Stabilisation
+        const stabilizedPotential = Math.max(dailyPotential, allMaxSuccess[index], lastPotential * timeDecay);
+        rawProject.push(stabilizedPotential);
+    });
+
+    const { avgSuccess, avgProject } = calculateMovingAverages(rawSuccess, rawProject);
+    createClimbChart(ctx, 'Voie', labels, rawSuccess, avgSuccess, avgProject, 'window.myVoieChart', 21);
+}
+
+// Fonction utilitaire pour éviter la répétition
+function calculateMovingAverages(rawSuccess, rawProject) {
+    const avgSuccess = [];
+    const avgProject = [];
     for (let i = 0; i < rawSuccess.length; i++) {
         const start = Math.max(0, i - 3);
-        const windowS = rawSuccess.slice(start, i + 1);
-        const windowP = rawProject.slice(start, i + 1);
-        avgSuccessData.push(windowS.reduce((a, b) => a + b, 0) / windowS.length);
-        avgProjectData.push(windowP.reduce((a, b) => a + b, 0) / windowP.length);
+        const winS = rawSuccess.slice(start, i + 1);
+        const winP = rawProject.slice(start, i + 1);
+        avgSuccess.push(winS.reduce((a, b) => a + b, 0) / winS.length);
+        avgProject.push(winP.reduce((a, b) => a + b, 0) / winP.length);
     }
-
-    createClimbChart(ctx, 'Voie', labels, rawSuccess, avgSuccessData, avgProjectData, 'window.myVoieChart', 27);
+    return { avgSuccess, avgProject };
 }
+
+const VOIE_LABELS = ['', '4c', '5a', '5b', '5c', '6a', '6b', '6c', '7a', '7b', '7c', '8a', '8b', '8c'];
+const VOIE_LEVELS_REVERSE = {
+    1: '4c', 2: '5a', 3: '5b', 4: '5c', 5: '6a', 6: '6a+', 7: '6b', 8: '6b+', 9: '6c', 10: '6c+',
+    11: '7a', 12: '7a+', 13: '7b', 14: '7b+', 15: '7c', 16: '7c+', 17: '8a', 18: '8a+',19: '8b',20: '8b+', 21:'8c'
+};
 
 function createClimbChart(ctx, type, labels, successData, avgSuccessData, avgProjectData, chartRef, yMax) {
     const globalRef = chartRef === 'window.myBlocChart' ? window.myBlocChart : window.myVoieChart;
     if (globalRef) globalRef.destroy();
 
-    const mainColor = type === 'Bloc' ? '#10b981' : '#3b82f6';
-    const projectColor = '#ec4899'; // Rose
-    const avgColor = '#f59e0b';    // Jaune/Ambre
+    const mainColor = type === 'Bloc' ? '#10b981' : '#3b82f6'; // Vert ou Bleu
+    const projectColor = '#ec4899'; // Rose (Potentiel)
+    const avgColor = '#f59e0b';    // Jaune (Moyenne validée)
 
     const newChart = new Chart(ctx, {
         type: 'line',
@@ -1934,7 +2034,7 @@ function createClimbChart(ctx, type, labels, successData, avgSuccessData, avgPro
                     tension: 0.4,
                     borderWidth: 3,
                     pointRadius: 4,
-                    pointBackgroundColor: 'transparent', // Vide au milieu
+                    pointBackgroundColor: 'transparent', // Cercle vide
                     pointBorderColor: projectColor,
                     pointBorderWidth: 2,
                     pointHoverRadius: 6,
@@ -1947,7 +2047,7 @@ function createClimbChart(ctx, type, labels, successData, avgSuccessData, avgPro
                     tension: 0.4,
                     borderWidth: 3,
                     pointRadius: 4,
-                    pointBackgroundColor: 'transparent', // Vide au milieu
+                    pointBackgroundColor: 'transparent', // Cercle vide
                     pointBorderColor: avgColor,
                     pointBorderWidth: 2,
                     pointHoverRadius: 6,
@@ -1959,12 +2059,12 @@ function createClimbChart(ctx, type, labels, successData, avgSuccessData, avgPro
                     borderColor: mainColor,
                     backgroundColor: 'transparent',
                     tension: 0.2,
-                    borderWidth: 1,
-                    pointRadius: 4,
-                    pointBackgroundColor: 'transparent', // Vide au milieu
+                    borderWidth: 1.5,
+                    pointRadius: 5,
+                    pointBackgroundColor: 'transparent', // Cercle vide
                     pointBorderColor: mainColor,
                     pointBorderWidth: 2,
-                    pointHoverRadius: 6,
+                    pointHoverRadius: 7,
                 }
             ]
         },
@@ -1984,17 +2084,42 @@ function createClimbChart(ctx, type, labels, successData, avgSuccessData, avgPro
                                 const bLabels = ['', 'Jaune', 'Vert', 'Bleu', 'Rouge', 'Noir', 'Violet', 'Élite'];
                                 return bLabels[value] || '';
                             }
-                            return (typeof voieLabels !== 'undefined') ? voieLabels[value] || '' : value;
+                            // Utilise VOIE_LEVELS_REVERSE défini globalement
+                            return (typeof VOIE_LEVELS_REVERSE !== 'undefined') ? VOIE_LEVELS_REVERSE[value] || '' : value;
                         }
                     },
                     grid: { color: 'rgba(255,255,255,0.05)' }
                 },
-                x: { ticks: { color: '#94a3b8' }, grid: { display: false } }
+                x: { 
+                    ticks: { color: '#94a3b8', font: { size: 9 } }, 
+                    grid: { display: false } 
+                }
             },
             plugins: {
                 legend: { 
-                    labels: { color: '#f8fafc', font: { size: 10 }, usePointStyle: true } 
+                    labels: { 
+                        color: '#f8fafc', 
+                        font: { size: 10 }, 
+                        usePointStyle: true,
+                        padding: 15
+                    } 
                 },
+                tooltip: {
+                    backgroundColor: '#1e293b',
+                    padding: 10,
+                    borderRadius: 8,
+                    callbacks: {
+                        label: function(context) {
+                            let val = context.parsed.y;
+                            let label = context.dataset.label.split('(')[0] + ": ";
+                            if (type === 'Bloc') {
+                                const bLabels = ['', 'Jaune', 'Vert', 'Bleu', 'Rouge', 'Noir', 'Violet', 'Élite'];
+                                return label + (bLabels[Math.round(val)] || val);
+                            }
+                            return label + (VOIE_LEVELS_REVERSE[Math.round(val)] || val);
+                        }
+                    }
+                }
             }
         }
     });
@@ -3862,21 +3987,26 @@ function renderSchedule() {
 const CONFIG_CLIMB = {
     'Bloc': {
         levels: ['Jaune', 'Vert', 'Bleu', 'Rouge', 'Noir', 'Violet'],
-        colors: { 'Jaune': '#fbbf24', 'Vert': '#4ade80', 'Bleu': '#60a5fa', 'Rouge': '#f87171', 'Noir': '#1e293b', 'Violet': '#a855f7' }
+        colors: { 'Jaune': '#fbbf24', 'Vert': '#4ade80', 'Bleu': '#60a5fa', 'Rouge': '#f87171', 'Noir': '#1e293b', 'Violet': '#a855f7' },
+        defaultHeight: 4 // Un bloc fait souvent ~4m
     },
     'Voie': {
-        levels: ['4c', '5a', '5b', '5c', '6a', '6b', '6c', '7a', '7b','7c','8a','8b','8c'],
-        colors: {} // On utilisera une couleur par défaut pour les voies
+        levels: ['4c', '5a', '5b', '5c', '6a','6a+', '6b','6b+', '6c','6c+', '7a','7a+',
+            '7b','7b+','7c','7c+','8a','8a+','8b','8b+','8c'],
+        colors: {},
+        defaultHeight: 12 // Une voie moyenne en salle
     }
 };
 
+// On ajoute 'attempts' à l'objet de session
 let currentClimbSession = {
-    startTime: null,
     type: '',
     laps: [],
     selectedLevel: '',
-    selectedColor: ''
+    selectedColor: '',
+    currentAttempts: 1 // Compteur temporaire pour l'essai en cours
 };
+
 
 let isSuccess = true; // État global du bouton OUI/NON
 
@@ -3887,8 +4017,15 @@ function startClimb(type) {
         type: type, // 'Bloc' ou 'Voie'
         startTime: new Date(),
         laps: [],
-        selectedLevel: type === 'Bloc' ? 'Jaune' : '5a'
+        selectedLevel: type === 'Bloc' ? 'Jaune' : '5a',
+        currentAttempts: 1 // Compteur temporaire pour l'essai en cours
     };
+
+    // Dans startClimb(type)
+    const heightSelector = document.getElementById('height-selector');
+    if (heightSelector) {
+        heightSelector.style.display = (type === 'Voie') ? 'block' : 'none';
+    }
 
     document.getElementById('climb-setup').classList.add('hidden');
     document.getElementById('climb-active').classList.remove('hidden');
@@ -3958,33 +4095,65 @@ function setClimbStatus(status) {
 function addClimbLap() {
     const level = currentClimbSession.selectedLevel;
     const effort = document.getElementById('climb-effort').value;
+    const height = currentClimbSession.type === 'Voie' ? document.getElementById('climb-height-range').value : CONFIG_CLIMB['Bloc'].defaultHeight;
     const status = isSuccess;
+    const attempts = parseInt(currentClimbSession.currentAttempts) || 1;
 
     const lap = {
         level: level,
         effort: effort,
         success: status,
-        color: currentClimbSession.selectedColor, // On stocke la couleur pour le rendu
+        attempts: attempts,
+        height: parseInt(height),
+        color: currentClimbSession.selectedColor,
         time: new Date().toLocaleTimeString('fr-FR', {hour: '2-digit', minute: '2-digit'})
     };
     
     currentClimbSession.laps.push(lap);
-    saveClimbState(); // SAUVEGARDE
-    renderClimbLapsList(); // On utilise une fonction dédiée pour l'affichage
+    
+    // Reset du compteur de tentatives pour le prochain bloc/voie
+    currentClimbSession.currentAttempts = 1;
+    const display = document.getElementById('climb-attempts-count');
+    if (display) display.innerText = "1";
+
+    saveClimbState();
+    renderClimbLapsList();
+}
+
+// Gérer le compteur de tentatives avant d'ajouter le lap
+function updateAttempt(delta) {
+    currentClimbSession.currentAttempts = Math.max(1, (currentClimbSession.currentAttempts || 1) + delta);
+    const display = document.getElementById('climb-attempts-count');
+    if (display) display.innerText = currentClimbSession.currentAttempts;
+}
+
+// Mettre à jour l'affichage de la hauteur (curseur range)
+function updateHeightDisplay(val) {
+    const display = document.getElementById('height-value');
+    if (display) display.innerText = val + 'm';
 }
 
 // Nouvelle fonction pour gérer l'affichage de la liste
 function renderClimbLapsList() {
     const container = document.getElementById('climb-laps');
     
-    container.innerHTML = currentClimbSession.laps.map((lap, index) => `
+    container.innerHTML = currentClimbSession.laps.map((lap, index) => {
+        const isFlash = lap.success && lap.attempts === 1;
+        
+        return `
         <div class="flex justify-between items-center p-4 glass rounded-2xl border-l-4 mb-2" 
             style="border-left-color: ${lap.success ? lap.color : '#ef4444'}">
             <div class="flex items-center gap-3">
-                <span class="text-xl">${lap.success ? '✅' : '❌'}</span>
+                <div class="relative">
+                    <span class="text-xl">${lap.success ? '✅' : '❌'}</span>
+                    ${lap.attempts > 1 ? `<span class="absolute -top-2 -right-2 bg-slate-800 text-[9px] px-1.5 rounded-full border border-white/20">${lap.attempts}</span>` : ''}
+                </div>
                 <div>
-                    <span class="block text-white font-bold text-sm">${currentClimbSession.type} ${lap.level}</span>
-                    <span class="text-[10px] text-slate-500">${lap.time}</span>
+                    <div class="flex items-center gap-2">
+                        <span class="text-white font-bold text-sm">${lap.level}</span>
+                        ${isFlash ? `<span class="text-[8px] bg-yellow-500/20 text-yellow-500 px-1 rounded">FLASH</span>` : ''}
+                    </div>
+                    <span class="text-[10px] text-slate-500">${lap.height}m • ${lap.time}</span>
                 </div>
             </div>
             <div class="flex items-center gap-4">
@@ -3994,13 +4163,14 @@ function renderClimbLapsList() {
                             <div class="w-1.5 h-1.5 rounded-full ${i < lap.effort ? 'bg-violet-500' : 'bg-slate-700'}"></div>
                         `).join('')}
                     </div>
+                    <span class="text-[8px] text-slate-600 uppercase">Effort</span>
                 </div>
-                <button onclick="removeClimbLap(${index})" class="p-2 text-slate-500 hover:text-red-400 transition-colors">
+                <button onclick="removeClimbLap(${index})" class="p-2 text-slate-500">
                     <i data-lucide="x" class="w-4 h-4"></i>
                 </button>
             </div>
-        </div>
-    `).reverse().join(''); // .reverse() pour avoir le dernier en haut
+        </div>`;
+    }).reverse().join('');
     
     if (window.lucide) lucide.createIcons();
 }
@@ -4024,15 +4194,18 @@ async function finishClimbSession() {
         return;
     }
 
+    const totalLaps = currentClimbSession.laps.length;
     const successes = currentClimbSession.laps.filter(l => l.success).length;
+    // Calcul du cumul des tentatives pour la séance
+    const totalAttempts = currentClimbSession.laps.reduce((sum, lap) => sum + lap.attempts, 0);
 
     pendingData = {
         type: "Escalade",
         exercise: currentClimbSession.type,
         duration: duration,
-        details: currentClimbSession.laps,
+        details: currentClimbSession.laps, // Contient maintenant .attempts et .height
         timestamp: new Date().toISOString(),
-        note: `${successes} réussi(s) sur ${currentClimbSession.laps.length} tentatives.`
+        note: `${successes}/${totalLaps} réussi(s) (${totalAttempts} tps total).`
     };
 
     resetClimbUI();

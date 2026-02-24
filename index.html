@@ -519,17 +519,18 @@
             <div id="goals-container" class="grid gap-4">
                 </div>
         </section>
+
         <section id="section-escalade" class="hidden p-4 space-y-6">
             <div id="climb-setup" class="glass p-6 rounded-3xl border border-white/10">
-                <h2 class="text-xl font-black mb-4 uppercase tracking-tighter">Nouvelle Séance</h2>
+                <h2 class="text-xl font-black mb-4 uppercase tracking-tighter text-white">Nouvelle Séance</h2>
                 <div class="grid grid-cols-2 gap-4">
-                    <button onclick="startClimb('Bloc')" class="p-4 bg-slate-800 rounded-2xl border border-white/5 hover:border-violet-500 transition-all text-center">
-                        <span class="block text-2xl mb-1">🧗</span>
-                        <span class="font-bold text-sm">Bloc</span>
+                    <button onclick="startClimb('Bloc')" class="p-4 bg-slate-800 rounded-2xl border border-white/5 hover:border-violet-500 transition-all text-center group">
+                        <span class="block text-2xl mb-1 group-hover:scale-110 transition-transform">🧗</span>
+                        <span class="font-bold text-sm text-slate-300">Bloc</span>
                     </button>
-                    <button onclick="startClimb('Voie')" class="p-4 bg-slate-800 rounded-2xl border border-white/5 hover:border-violet-500 transition-all text-center">
-                        <span class="block text-2xl mb-1">🚠</span>
-                        <span class="font-bold text-sm">Voie</span>
+                    <button onclick="startClimb('Voie')" class="p-4 bg-slate-800 rounded-2xl border border-white/5 hover:border-violet-500 transition-all text-center group">
+                        <span class="block text-2xl mb-1 group-hover:scale-110 transition-transform">🚠</span>
+                        <span class="font-bold text-sm text-slate-300">Voie</span>
                     </button>
                 </div>
             </div>
@@ -544,31 +545,55 @@
                 </div>
 
                 <div class="glass p-4 rounded-3xl border border-white/10 space-y-4">
-                    <div class="flex items-center justify-between bg-white/5 p-2 rounded-xl">
-                        <span class="text-[10px] font-bold text-slate-400 uppercase ml-2">Résultat ?</span>
-                        <div class="flex gap-2">
-                            <button onclick="setClimbStatus(true)" id="btn-success" class="px-4 py-1 rounded-lg bg-emerald-500/20 text-emerald-500 border border-emerald-500/50 text-xs font-bold transition-all">OUI</button>
-                            <button onclick="setClimbStatus(false)" id="btn-fail" class="px-4 py-1 rounded-lg bg-slate-800 text-slate-500 text-xs font-bold transition-all">NON</button>
+                    
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="bg-white/5 p-3 rounded-2xl flex flex-col justify-between">
+                            <span class="text-[9px] font-bold text-slate-500 uppercase mb-2">Réussite ?</span>
+                            <div class="flex gap-2">
+                                <button onclick="setClimbStatus(true)" id="btn-success" class="flex-1 py-2 rounded-xl bg-emerald-500/20 text-emerald-500 border border-emerald-500/50 text-[10px] font-black transition-all">OUI</button>
+                                <button onclick="setClimbStatus(false)" id="btn-fail" class="flex-1 py-2 rounded-xl bg-slate-800 text-slate-500 text-[10px] font-black transition-all">NON</button>
+                            </div>
+                        </div>
+
+                        <div class="bg-white/5 p-3 rounded-2xl flex flex-col justify-between">
+                            <span class="text-[9px] font-bold text-slate-500 uppercase mb-2">Tentatives</span>
+                            <div class="flex items-center justify-between">
+                                <button onclick="updateAttempt(-1)" class="w-7 h-7 rounded-lg bg-slate-800 flex items-center justify-center text-white border border-white/5">-</button>
+                                <span id="climb-attempts-count" class="font-black text-violet-400 text-sm">1</span>
+                                <button onclick="updateAttempt(1)" class="w-7 h-7 rounded-lg bg-slate-800 flex items-center justify-center text-white border border-white/5">+</button>
+                            </div>
                         </div>
                     </div>
 
+                    <div id="height-selector" class="bg-white/5 p-3 rounded-2xl">
+                        <div class="flex justify-between mb-2">
+                            <span class="text-[9px] font-bold text-slate-500 uppercase">Hauteur de la voie</span>
+                            <span id="height-value" class="text-[10px] font-black text-violet-400">12m</span>
+                        </div>
+                        <input type="range" id="climb-height-range" min="5" max="30" value="12" 
+                            oninput="updateHeightDisplay(this.value)"
+                            class="w-full h-1 bg-slate-700 rounded-lg appearance-none accent-violet-500">
+                    </div>
+
                     <div>
-                        <p class="text-[10px] font-bold text-slate-500 uppercase mb-3 px-1">Difficulté</p>
+                        <p class="text-[9px] font-bold text-slate-500 uppercase mb-3 px-1">Difficulté / Niveau</p>
                         <div id="climb-levels-grid" class="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
                             </div>
                     </div>
 
-                    <div class="flex justify-between items-center bg-white/5 p-3 rounded-xl">
-                        <span class="text-[10px] font-bold text-slate-400 uppercase">Ressenti (1-5)</span>
-                        <input type="range" id="climb-effort" min="1" max="5" value="3" class="w-1/2 accent-violet-500">
+                    <div class="flex justify-between items-center bg-white/5 p-3 rounded-2xl">
+                        <span class="text-[9px] font-bold text-slate-400 uppercase">Ressenti / Effort</span>
+                        <div class="flex gap-1 w-1/2">
+                            <input type="range" id="climb-effort" min="1" max="5" value="3" class="w-full accent-violet-500">
+                        </div>
                     </div>
 
                     <button onclick="addClimbLap()" class="w-full py-4 bg-white text-black rounded-2xl font-black text-sm uppercase italic shadow-lg active:scale-95 transition-transform">
-                        Valider l'essai
+                        Enregistrer l'essai
                     </button>
                 </div>
 
-                <div id="climb-laps" class="space-y-3 mt-4 max-h-[35vh] overflow-y-auto no-scrollbar">
+                <div id="climb-laps" class="space-y-3 mt-4 max-h-[30vh] overflow-y-auto no-scrollbar">
                     </div>
 
                 <button onclick="finishClimbSession()" class="w-full py-4 bg-red-500/10 border border-red-500/30 text-red-500 rounded-3xl font-black uppercase text-[10px] tracking-[0.2em] hover:bg-red-500/20 transition-colors">
