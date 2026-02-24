@@ -4083,13 +4083,23 @@ function setClimbStatus(status) {
     const btnSuccess = document.getElementById('btn-success');
     const btnFail = document.getElementById('btn-fail');
     
-    if(status) {
-        btnSuccess.className = 'px-4 py-1 rounded-lg bg-emerald-500/20 text-emerald-500 border border-emerald-500/50 text-xs font-bold';
-        btnFail.className = 'px-4 py-1 rounded-lg bg-slate-800 text-slate-500 text-xs';
-    } else {
-        btnSuccess.className = 'px-4 py-1 rounded-lg bg-slate-800 text-slate-500 text-xs';
-        btnFail.className = 'px-4 py-1 rounded-lg bg-red-500/20 text-red-500 border border-red-500/50 text-xs font-bold';
-    }
+    // Classes pour le bouton SUCCESS (Vert si actif, gris sinon)
+    btnSuccess.classList.toggle('bg-emerald-500/20', status);
+    btnSuccess.classList.toggle('text-emerald-500', status);
+    btnSuccess.classList.toggle('border-emerald-500/50', status);
+    
+    btnSuccess.classList.toggle('bg-slate-800', !status);
+    btnSuccess.classList.toggle('text-slate-500', !status);
+    btnSuccess.classList.toggle('border-transparent', !status);
+
+    // Classes pour le bouton FAIL (Rouge si actif, gris sinon)
+    btnFail.classList.toggle('bg-red-500/20', !status);
+    btnFail.classList.toggle('text-red-500', !status);
+    btnFail.classList.toggle('border-red-500/50', !status);
+    
+    btnFail.classList.toggle('bg-slate-800', status);
+    btnFail.classList.toggle('text-slate-500', status);
+    btnFail.classList.toggle('border-transparent', status);
 }
 
 function addClimbLap() {
