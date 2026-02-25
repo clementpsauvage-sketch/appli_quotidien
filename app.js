@@ -982,6 +982,27 @@ function renderClimbingDetails(log) {
     `;
 }
 
+// --- MOTEUR 6 : REFLEXES ---
+
+function renderReflexeDetails(log) {
+    return `
+        <div class="grid grid-cols-3 gap-2 mb-3">
+            <div class="bg-amber-500/10 p-2 rounded-xl border border-amber-500/20 text-center">
+                <p class="text-[9px] text-slate-500 uppercase">Médiane</p>
+                <p class="text-xs font-bold text-amber-400">${log.medianTime}ms</p>
+            </div>
+            <div class="bg-violet-500/10 p-2 rounded-xl border border-violet-500/20 text-center">
+                <p class="text-[9px] text-slate-500 uppercase">Meilleur</p>
+                <p class="text-xs font-bold text-violet-400">${log.bestTime}ms</p>
+            </div>
+            <div class="bg-slate-800/40 p-2 rounded-xl border border-slate-700 text-center">
+                <p class="text-[9px] text-slate-500 uppercase">Flashs</p>
+                <p class="text-xs font-bold text-white">${log.totalCount}</p>
+            </div>
+        </div>
+    `;
+}
+
 let showAllLogs = false; // Variable indépendante
 
 async function renderLogs(filter = 'all') {
@@ -1020,6 +1041,7 @@ async function renderLogs(filter = 'all') {
             case 'Musique': specificContent = renderMusicDetails(log); break;
             case 'Étirement': specificContent = renderStretchDetails(log); break;
             case 'Escalade': specificContent = renderClimbingDetails(log); break;
+            case 'Réflexes': specificContent = renderReflexeDetails(log); break;
             default: specificContent = renderMuscuDetails(log);
         }
 
@@ -1250,6 +1272,7 @@ async function updateStatsDashboard() {
     if (typeof renderVolumeChart === "function") renderVolumeChart(allLogs);
     if (typeof renderFatigueChart === "function") renderFatigueChart(allLogs);
     if (typeof renderHeatmap === "function") renderHeatmap(allLogs);
+    if (typeof renderReflexChart === "function") renderReflexChart(allLogs);
     
     // Radars (Équilibre & Profil) - Pas de tri/filtre
     const objectifsHebdo = { 'Escalade': 120, 'Musculation': 60, 'Course': 90, 'Musique': 130, 'Stretching': 60 };
@@ -1370,6 +1393,103 @@ function renderArmBalanceChart(data) {
                 ctx.restore();
             }
         }]
+    });
+}
+
+function renderReflexChart(logs) {
+    const canvas = document.getElementById('reflexChart');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+
+    if (window.myReflexChart) window.myReflexChart.destroy();
+
+    // Filtrer les logs Réflexes
+    const reflexLogs = logs.filter(log => log.type === 'Réflexes');
+
+    if (reflexLogs.length === 0) return;
+
+    // Prendre les 15 derniers et créer les labels proprement
+    const last15Logs = reflexLogs.slice(-15);
+
+    const labels = last15Logs.map(log => {
+    // 1. On récupère la valeur brute (date ou timestamp)
+    let dateValue = log.timestamp || log.date;
+    
+    // 2. Si c'est au format "DD/MM/YYYY" (ex: 24/05/2024), 
+    // JS ne sait pas le lire. On doit le transformer en "YYYY-MM-DD"
+    if (typeof dateValue === 'string' && dateValue.includes('/')) {
+            const parts = dateValue.split('/');
+            if (parts.length === 3) {
+                // Transforme "24/05/2024" en "2024-05-24"
+                dateValue = `${parts[2]}-${parts[1]}-${parts[0]}`;
+            }
+        }
+
+        const d = new Date(dateValue);
+        
+        // 3. Si c'est toujours invalide, on essaie de voir si c'est un nombre (timestamp Unix)
+        if (isNaN(d.getTime()) && !isNaN(dateValue)) {
+            const d2 = new Date(parseInt(dateValue));
+            if (!isNaN(d2.getTime())) return d2.toLocaleDateString('fr-FR', {day: 'numeric', month: 'short'});
+        }
+
+        // Retour final sécurisé
+        if (isNaN(d.getTime())) return "??";
+        
+        return d.toLocaleDateString('fr-FR', {day: 'numeric', month: 'short'});
+    });
+
+    const medianData = last15Logs.map(log => log.medianTime);
+    const bestData = last15Logs.map(log => log.bestTime);
+
+    window.myReflexChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: 'Médiane (ms)',
+                    data: medianData,
+                    borderColor: '#fbbf24',
+                    backgroundColor: 'rgba(251, 191, 36, 0.1)',
+                    fill: true,
+                    tension: 0.4,
+                    borderWidth: 3,
+                    pointRadius: 3
+                },
+                {
+                    label: 'Record (ms)',
+                    data: bestData,
+                    borderColor: '#a78bfa',
+                    borderDash: [5, 5],
+                    tension: 0.4,
+                    borderWidth: 2,
+                    pointRadius: 0
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    reverse: true, // IMPORTANT pour les réflexes : plus le temps est bas, plus la courbe monte
+                    grid: { color: 'rgba(255,255,255,0.05)' },
+                    ticks: { color: '#94a3b8' }
+                },
+                x: {
+                    grid: { display: false },
+                    ticks: { color: '#94a3b8', font: { size: 9 } }
+                }
+            },
+            plugins: {
+                legend: { 
+                    display: true, 
+                    position: 'top',
+                    labels: { color: '#94a3b8', boxWidth: 10, font: { size: 10 } } 
+                }
+            }
+        }
     });
 }
 
@@ -3570,6 +3690,7 @@ const charts = [
     { id: 'mainChart', title: 'Évolution du Ressenti' },
     { id: 'runChart', title: "Allure Course (min/km)" },
     { id: 'statsChart', title: "Endurance (Repos/Rep)" },
+    { id: 'reflexChart', title: "Evolution des réflexes" },
     { id: 'blocEvolutionChart', title: 'Evolution niveau escalade (bloc)'},
     { id: 'voieEvolutionChart', title: 'Evolution niveau escalade (voie)'},
     { id: 'scatterChart', title: "Flow State (Escalade)" },
@@ -4524,3 +4645,175 @@ async function updateSleepChart() {
         plugins: [backgroundZones]
     });
 }
+
+// ------------------------------------
+// ------- REFLEXE --------------------
+// -------------------------------------
+
+
+
+
+let reflexSession = {
+    active: false,
+    state: 'IDLE', // IDLE, WAITING, READY
+    results: [],
+    startTime: 0,
+    limitType: 'count', // count ou time
+    limitValue: 0,
+    countDone: 0,
+    timerEnd: 0
+};
+
+function toggleReflexInput() {
+    const type = document.getElementById('reflex-end-type').value;
+    document.getElementById('reflex-input-label').innerText = type === 'count' ? "Nombre de flashs" : "Temps limite (secondes)";
+}
+
+let activeTargetId = null;
+
+function handleReflexLogic(e) {
+    // 1. Si on n'est pas en jeu, on lance la série
+    if (!reflexSession.active) {
+        startNewSeries();
+        return;
+    }
+
+    // 2. Gestion du clic pendant le jeu
+    if (reflexSession.uiMode === 'classic') {
+        // En mode bouton unique, n'importe quel clic sur le container compte
+        if (reflexSession.state === 'READY') processClick(false);
+        else if (reflexSession.state === 'WAITING') processClick(true);
+    } 
+    // En mode 'choice', on ne fait rien ici, c'est le clic sur la cible qui gère
+}
+
+function startNewSeries() {
+    reflexSession.active = true;
+    reflexSession.results = [];
+    reflexSession.countDone = 0;
+    reflexSession.limitType = document.getElementById('reflex-end-type').value;
+    reflexSession.limitValue = parseInt(document.getElementById('reflex-limit-value').value);
+    reflexSession.uiMode = document.getElementById('reflex-ui-mode').value;
+    
+    if (reflexSession.limitType === 'time') {
+        reflexSession.timerEnd = Date.now() + (reflexSession.limitValue * 1000);
+    }
+
+    document.getElementById('reflex-placeholder').classList.add('hidden');
+    document.getElementById('reflex-series-stats').classList.remove('hidden');
+    if (reflexSession.uiMode === 'choice') document.getElementById('choice-grid').classList.remove('hidden');
+
+    prepareNextFlash();
+}
+
+function prepareNextFlash() {
+    // Vérifier si fini
+    const isFinished = reflexSession.limitType === 'count' 
+        ? reflexSession.countDone >= reflexSession.limitValue
+        : Date.now() >= reflexSession.timerEnd;
+
+    if (isFinished) {
+        finishSeries();
+        return;
+    }
+
+    reflexSession.state = 'WAITING';
+    resetTargets();
+    document.getElementById('reflex-container').style.backgroundColor = "transparent";
+    document.getElementById('reflex-remaining').innerText = reflexSession.limitType === 'count' 
+        ? (reflexSession.limitValue - reflexSession.countDone) 
+        : Math.round((reflexSession.timerEnd - Date.now())/1000) + "s";
+
+    const delay = Math.random() * 2000 + 1000; // Entre 1 et 3 sec
+    setTimeout(() => {
+        if (!reflexSession.active || reflexSession.state !== 'WAITING') return;
+        triggerFlash();
+    }, delay);
+}
+
+function triggerFlash() {
+    reflexSession.state = 'READY';
+    reflexSession.startTime = performance.now();
+    
+    if (reflexSession.uiMode === 'classic') {
+        document.getElementById('reflex-container').classList.add('bg-green-500/40');
+    } else {
+        activeTargetId = Math.floor(Math.random() * 4);
+        const target = document.getElementById(`target-${activeTargetId}`);
+        
+        target.classList.replace('bg-slate-800', 'bg-amber-400');
+        target.classList.add('shadow-[0_0_20px_rgba(251,191,36,0.6)]', 'scale-95');
+        
+        // On rend la cible cliquable spécifiquement
+        target.style.pointerEvents = "auto";
+        target.onclick = (e) => {
+            e.stopPropagation(); // Empêche le clic de remonter au container
+            processClick(false);
+        };
+    }
+}
+
+function processClick(tooEarly) {
+    if (tooEarly) {
+        // Optionnel : pénalité ou juste ignorer
+        return;
+    }
+    const diff = Math.round(performance.now() - reflexSession.startTime);
+    reflexSession.results.push(diff);
+    reflexSession.countDone++;
+    document.getElementById('reflex-last-time').innerText = diff + " ms";
+    
+    reflexSession.state = 'IDLE';
+    prepareNextFlash();
+}
+
+function resetTargets() {
+    activeTargetId = null;
+    for (let i = 0; i < 4; i++) {
+        const t = document.getElementById(`target-${i}`);
+        t.className = "h-20 rounded-2xl bg-slate-800 border border-slate-700 transition-all pointer-events-none";
+        t.style.boxShadow = "none";
+        t.onclick = null; // On retire l'événement
+    }
+}
+
+function resetReflexUI() {
+    reflexSession.active = false;
+    reflexSession.state = 'IDLE';
+    
+    // Réapparition du bouton / placeholder
+    document.getElementById('reflex-placeholder').classList.remove('hidden');
+    document.getElementById('reflex-container').classList.remove('bg-green-500/40');
+    document.getElementById('choice-grid').classList.add('hidden');
+    document.getElementById('reflex-series-stats').classList.add('hidden');
+    
+    resetTargets();
+}
+
+function finishSeries() {
+    reflexSession.active = false;
+    const sorted = [...reflexSession.results].sort((a,b) => a-b);
+    const avg = Math.round(reflexSession.results.reduce((a,b) => a+b, 0) / reflexSession.results.length);
+    const median = sorted[Math.floor(sorted.length/2)];
+    
+    const sessionData = {
+        type: 'Réflexes',
+        variant: reflexSession.uiMode === 'classic' ? 'Simple' : 'Précision',
+        results: reflexSession.results,
+        avgTime: avg,
+        medianTime: median,
+        bestTime: sorted[0],
+        totalCount: reflexSession.results.length,
+        date: new Date().toISOString(),
+        note: `Série de ${reflexSession.results.length} | Médiane: ${median}ms`
+    };
+
+    showMoodSelector(sessionData);
+    resetReflexUI(); // Ta fonction de reset précédente
+}
+
+// Variable pour stocker l'ID de la cible active
+
+
+
+

@@ -322,6 +322,54 @@
             </div>
         </section>
 
+        <section id="section-reflexes" class="hidden space-y-4">
+            <div class="flex items-center justify-between mb-2">
+                <button onclick="showSection('section-main')" class="text-slate-400 flex items-center gap-2 text-sm">
+                    <i data-lucide="arrow-left" class="w-4 h-4"></i> Retour
+                </button>
+                <h2 class="text-xl font-bold text-amber-400">Réflexes</h2>
+            </div>
+
+            <div class="glass p-4 rounded-3xl grid grid-cols-2 gap-3 text-left">
+                <div class="col-span-1">
+                    <label class="text-[10px] text-slate-500 uppercase ml-1">Mode Cible</label>
+                    <select id="reflex-ui-mode" class="w-full bg-slate-800 p-2 rounded-xl text-xs mt-1 outline-none">
+                        <option value="classic">Bouton Unique</option>
+                        <option value="choice">Grille (4 Boutons)</option>
+                    </select>
+                </div>
+                <div class="col-span-1">
+                    <label class="text-[10px] text-slate-500 uppercase ml-1">Type de Fin</label>
+                    <select id="reflex-end-type" onchange="toggleReflexInput()" class="w-full bg-slate-800 p-2 rounded-xl text-xs mt-1 outline-none">
+                        <option value="count">Nombre de Flashs</option>
+                        <option value="time">Temps Limite (s)</option>
+                    </select>
+                </div>
+                <div class="col-span-2">
+                    <label id="reflex-input-label" class="text-[10px] text-slate-500 uppercase ml-1">Nombre de flashs</label>
+                    <input type="number" id="reflex-limit-value" value="10" class="w-full bg-slate-800 p-2 rounded-xl text-xs mt-1 outline-none">
+                </div>
+            </div>
+
+            <div id="reflex-container" class="glass p-6 rounded-3xl text-center min-h-[300px] flex flex-col justify-center items-center transition-all cursor-pointer border border-white/5" onclick="handleReflexLogic()">
+                <div id="reflex-placeholder">
+                    <i data-lucide="play" class="w-12 h-12 mx-auto text-amber-400 mb-2"></i>
+                    <p class="font-bold">Lancer la série</p>
+                </div>
+                
+                <div id="choice-grid" class="hidden grid grid-cols-2 gap-4 w-full max-w-[220px]">
+                    <div id="target-0" class="h-20 rounded-2xl bg-slate-800 border border-slate-700"></div>
+                    <div id="target-1" class="h-20 rounded-2xl bg-slate-800 border border-slate-700"></div>
+                    <div id="target-2" class="h-20 rounded-2xl bg-slate-800 border border-slate-700"></div>
+                    <div id="target-3" class="h-20 rounded-2xl bg-slate-800 border border-slate-700"></div>
+                </div>
+            </div>
+
+            <div id="reflex-series-stats" class="hidden grid grid-cols-2 gap-2">
+                <div class="glass p-2 rounded-xl text-center"><p class="text-[9px] uppercase">Restant</p><p id="reflex-remaining" class="font-bold">-</p></div>
+                <div class="glass p-2 rounded-xl text-center"><p class="text-[9px] uppercase">Dernier</p><p id="reflex-last-time" class="font-bold">- ms</p></div>
+            </div>
+        </section>
 
             <section id="section-stats" class="hidden">
                 <h2 class="text-xl font-bold mb-6 text-white flex items-center gap-2">
@@ -479,6 +527,7 @@
                     <div id="wrapper-mainChart" class="chart-wrapper w-full h-[350px] flex items-center justify-center"><canvas id="mainChart"></canvas></div>
                     <div id="wrapper-runChart" class="chart-wrapper hidden w-full h-[350px] flex items-center justify-center"><canvas id="runChart"></canvas></div>
                     <div id="wrapper-statsChart" class="chart-wrapper hidden w-full h-[350px] flex items-center justify-center"><canvas id="statsChart"></canvas></div>
+                    <div id="wrapper-reflexChart" class="chart-wrapper hidden w-full h-[350px] flex items-center justify-center"><canvas id="reflexChart"></canvas></div>
                     <div id="wrapper-blocEvolutionChart" class="chart-wrapper hidden w-full h-[350px] flex items-center justify-center"><canvas id="blocEvolutionChart"></canvas></div>
                     <div id="wrapper-voieEvolutionChart" class="chart-wrapper hidden w-full h-[350px] flex items-center justify-center"><canvas id="voieEvolutionChart"></canvas></div>
                     <div id="wrapper-scatterChart" class="chart-wrapper hidden w-full h-[350px] flex items-center justify-center"><canvas id="scatterChart"></canvas></div>
@@ -694,6 +743,11 @@
         <button onclick="showSection('stretching')" class="flex-shrink-0 flex flex-col items-center gap-1 text-slate-400">
             <i data-lucide="accessibility" class="w-6 h-6"></i>
             <span class="text-[10px]">Zen</span>
+        </button>
+
+        <button onclick="showSection('reflexes')" class="flex-shrink-0 flex flex-col items-center gap-1 text-slate-400 group">
+            <i data-lucide="zap" class="w-6 h-6 group-hover:text-amber-400 transition-colors"></i>
+            <span class="text-[10px]">Réflexes</span>
         </button>
 
         <button onclick="showSection('sommeil')" class="flex-shrink-0 flex flex-col items-center gap-1 text-slate-400">
