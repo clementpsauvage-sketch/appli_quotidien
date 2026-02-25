@@ -258,51 +258,66 @@ function loadExercise(type) {
     document.getElementById('exercise-active').classList.remove('hidden');
     const container = document.getElementById('exercise-content');
 
-    if (type === 'deadhang' || type === 'arms90' || type === 'tractions') {
+    // Ajout de 'pumps' et 'core' à la condition
+    if (type === 'deadhang' || type === 'arms90' || type === 'tractions' || type === 'pumps' || type === 'core') {
         const isArms90 = type === 'arms90';
         const isTractions = type === 'tractions';
+        const isPumps = type === 'pumps';
+        const isCore = type === 'core';
+
         container.innerHTML = `
             <div class="glass p-6 rounded-3xl border border-violet-500/20 text-center">
                 <h3 class="font-bold text-xl mb-4 text-violet-400">
-                    ${isTractions ? 'Tractions' : (isArms90 ? 'Bras Bloqués' : 'Suspension')}
+                    ${isTractions ? 'Tractions' : (isPumps ? 'Pompes' : (isCore ? 'Gainage' : (isArms90 ? 'Bras Bloqués' : 'Suspension')))}
                 </h3>
                 <div class="grid grid-cols-2 gap-3 mb-6 text-left">
-                    ${isTractions ? `
+                    ${(isTractions || isPumps) ? `
                         <div class="col-span-2">
                             <label class="text-[10px] text-slate-500 uppercase ml-1">Variante</label>
-                            <select id="traction-variant" class="w-full bg-slate-800 p-2 rounded-xl text-xs mt-1 outline-none">
-                                <option value="Strictes">Strictes</option>
-                                <option value="Négatives">Négatives</option>
+                            <select id="exercise-variant" class="w-full bg-slate-800 p-2 rounded-xl text-xs mt-1 outline-none">
+                                ${isTractions ? `
+                                    <option value="Strictes">Strictes</option>
+                                    <option value="Négatives">Négatives</option>
+                                ` : `
+                                    <option value="Classiques">Classiques</option>
+                                    <option value="Diamant">Diamant</option>
+                                    <option value="Larges">Larges</option>
+                                    <option value="Inclinées">Inclinées</option>
+                                `}
                             </select>
                         </div>
                         <div class="col-span-2">
                             <label class="text-[10px] text-slate-500 uppercase ml-1">Répétitions par cycle</label>
-                            <input type="number" id="input-reps-per-cycle" value="5" class="w-full bg-slate-800 p-2 rounded-xl text-xs mt-1 outline-none">
+                            <input type="number" id="input-reps-per-cycle" value="10" class="w-full bg-slate-800 p-2 rounded-xl text-xs mt-1 outline-none">
                         </div>
-                    `: isArms90 ? `
+                    `: isCore ? `
+                        <div class="col-span-2">
+                            <label class="text-[10px] text-slate-500 uppercase ml-1">Type de gainage</label>
+                            <select id="exercise-variant" class="w-full bg-slate-800 p-2 rounded-xl text-xs mt-1 outline-none">
+                                <option value="Planche">Planche (Face)</option>
+                                <option value="Côté Droit">Côté Droit</option>
+                                <option value="Côté Gauche">Côté Gauche</option>
+                                <option value="Hollow Hold">Hollow Hold</option>
+                            </select>
+                        </div>
+                    ` : isArms90 ? `
                         <div class="col-span-1">
                             <label class="text-[10px] text-slate-500 uppercase ml-1">Angle</label>
                             <select id="hang-angle" class="w-full bg-slate-800 p-2 rounded-xl text-xs mt-1 outline-none">
-                                <option value="0">0°</option>
-                                <option value="45">45°</option>
-                                <option value="90">90°</option>
-                                <option value="120">120°</option>
-                                
+                                <option value="0">0°</option><option value="45">45°</option><option value="90">90°</option><option value="120">120°</option>
                             </select>
                         </div>
                         <div class="col-span-1">
                             <label class="text-[10px] text-slate-500 uppercase ml-1">Côté</label>
                             <select id="hang-side" class="w-full bg-slate-800 p-2 rounded-xl text-xs mt-1 outline-none">
-                                <option value="2 bras">2 bras</option>
-                                <option value="Bras Droit">Droit</option>
-                                <option value="Bras Gauche">Gauche</option>
+                                <option value="2 bras">2 bras</option><option value="Bras Droit">Droit</option><option value="Bras Gauche">Gauche</option>
                             </select>
                         </div>
                     ` : `
                         <div class="col-span-1">
                             <label class="text-[10px] text-slate-500 uppercase ml-1">Doigts</label>
                             <select id="hang-fingers" class="w-full bg-slate-800 p-2 rounded-xl text-xs mt-1 outline-none">
-                                <option value="10">10 Doigts</option><option value="9">9 Doigts</option><option value="8">8 Doigts</option><option value="7">7 Doigts</option><option value="6">6 Doigts</option><option value="5">5 Doigts</option><option value="4">4 Doigts</option><option value="3">3 Doigts</option><option value="2">2 Doigts</option><option value="1">1 Doigt</option>
+                                <option value="10">10 Doigts</option><option value="8">8 Doigts</option><option value="4">4 Doigts</option>
                             </select>
                         </div>
                         <div class="col-span-1">
@@ -314,11 +329,11 @@ function loadExercise(type) {
                     `}
                     <div class="col-span-1">
                         <label class="text-[10px] text-slate-500 uppercase ml-1">Travail (s)</label>
-                        <input type="number" id="input-work" value="30" class="w-full bg-slate-800 p-2 rounded-xl text-xs mt-1 outline-none">
+                        <input type="number" id="input-work" value="${isCore ? '45' : '30'}" class="w-full bg-slate-800 p-2 rounded-xl text-xs mt-1 outline-none">
                     </div>
                     <div class="col-span-1">
                         <label class="text-[10px] text-slate-500 uppercase ml-1">Repos (s)</label>
-                        <input type="number" id="input-rest" value="60" class="w-full bg-slate-800 p-2 rounded-xl text-xs mt-1 outline-none">
+                        <input type="number" id="input-rest" value="30" class="w-full bg-slate-800 p-2 rounded-xl text-xs mt-1 outline-none">
                     </div>
                     <div class="col-span-2">
                         <label class="text-[10px] text-slate-500 uppercase ml-1">Cycles</label>
@@ -334,7 +349,6 @@ function loadExercise(type) {
             </div>
         `;
     }
-
     if (type === 'pyramid') {
         container.innerHTML = `
             <div class="glass p-6 rounded-3xl text-center">
@@ -358,12 +372,16 @@ function loadExercise(type) {
 function startComplexCycle(type) {
     const isArms90 = type === 'arms90';
     const isTractions = type === 'tractions';
+    const isPumps = type === 'pumps'; // Nouveau
+    const isCore = type === 'core';   // Nouveau
+    
     const work = parseInt(document.getElementById('input-work').value);
     const rest = parseInt(document.getElementById('input-rest').value);
     const cycles = parseInt(document.getElementById('input-cycles').value);
     
-    // 1. Récupérer les répétitions par cycle (uniquement pour les tractions)
-    const repsPerCycle = isTractions ? parseInt(document.getElementById('input-reps-per-cycle').value) : 1;
+    // Récupérer les répétitions (pour Tractions OU Pompes)
+    const hasReps = isTractions || isPumps;
+    const repsPerCycle = hasReps ? parseInt(document.getElementById('input-reps-per-cycle').value) : 1;
 
     const btn = document.getElementById('btn-start');
     const status = document.getElementById('timer-status');
@@ -395,30 +413,33 @@ function startComplexCycle(type) {
                     clearInterval(interval);
                     beep(880, 500);
                     
-                    // 2. Calculer le volume total (Séries x Reps)
-                    const totalReps = isTractions ? (cycles * repsPerCycle) : cycles;
+                    const totalReps = hasReps ? (cycles * repsPerCycle) : cycles;
 
                     const sessionData = {
-                        type: isTractions ? 'Tractions' : (isArms90 ? 'Bras 90°' : 'Suspension'),
+                        // Nom de l'exercice pour l'affichage
+                        type: isTractions ? 'Tractions' : 
+                                isPumps ? 'Pompes' : 
+                                isCore ? 'Gainage' : 
+                                isArms90 ? 'Bras 90°' : 'Suspension',
                         work, 
                         rest, 
                         cycles,
-                        repsPerCycle: isTractions ? repsPerCycle : null, // Stockage pour l'historique
-                        avgWorkPerRep : isTractions? (work*cycles/totalReps).toFixed(1) : null,
-                        avgRestPerRep : isTractions? (rest*cycles/totalReps).toFixed(1) : null,
-
-                        totalReps: totalReps, // Donnée clé pour renderVolumeChart
+                        repsPerCycle: hasReps ? repsPerCycle : null,
+                        avgWorkPerRep : hasReps ? (work*cycles/totalReps).toFixed(1) : null,
+                        avgRestPerRep : hasReps ? (rest*cycles/totalReps).toFixed(1) : null,
+                        totalReps: totalReps,
                         
-                        // Note formatée selon l'exercice
-                        note: isTractions ? 
+                        // Note personnalisée
+                        note: hasReps ? 
                                 `${cycles} x ${repsPerCycle} reps (${work}s / Repos: ${rest}s)` : 
                                 `${cycles} x ${work}s (Repos: ${rest}s)`,
                         
-                        variant: isTractions ? document.getElementById('traction-variant').value : null,
+                        // Variantes spécifiques
+                        variant: (isTractions || isPumps || isCore) ? document.getElementById('exercise-variant').value : null,
                         angle: isArms90 ? document.getElementById('hang-angle').value : null,
                         side: isArms90 ? document.getElementById('hang-side').value : null,
-                        fingers: (!isArms90 && !isTractions) ? document.getElementById('hang-fingers').value : null,
-                        hands: (!isArms90 && !isTractions) ? document.getElementById('hang-hands').value : null,
+                        fingers: (!isArms90 && !isTractions && !isPumps && !isCore) ? document.getElementById('hang-fingers').value : null,
+                        hands: (!isArms90 && !isTractions && !isPumps && !isCore) ? document.getElementById('hang-hands').value : null,
                     };
                     
                     showMoodSelector(sessionData);
@@ -426,7 +447,14 @@ function startComplexCycle(type) {
                 }
                 isWorking = true;
                 timeLeft = work;
-                status.innerText = isTractions ? "EFFORT" : (isArms90 ? "BLOCAGE" : "SUSPENSION");
+                
+                // Libellé de l'effort
+                if(isTractions) status.innerText = "EFFORT";
+                else if(isPumps) status.innerText = "POMPES";
+                else if(isCore) status.innerText = "GAINAGE";
+                else if(isArms90) status.innerText = "BLOCAGE";
+                else status.innerText = "SUSPENSION";
+                
                 status.className = "text-violet-400 uppercase tracking-widest text-sm font-bold font-mono";
             }
         }
@@ -662,7 +690,7 @@ function finalSave(jsonStr, moodScore) {
 // --- JOURNAL (RENDER LOGS) ---
 // --- MOTEUR 1 : MUSCU & SUSPENSION (Ton code qui fonctionne) ---
 function renderMuscuDetails(log) {
-    // 1. Tags de variantes
+    // 1. Tags de variantes (Commun à Tractions, Pompes, Gainage)
     const variantTag = log.variant ? `
         <span class="bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded text-[9px] uppercase font-bold border border-emerald-500/30">
             ${log.variant}
@@ -673,7 +701,7 @@ function renderMuscuDetails(log) {
             ▲ Semi-Pyramide
         </span>` : '';
 
-    // 2. Détails techniques (Angle, Bras, Mains, Doigts)
+    // 2. Détails techniques spécifiques (Escalade / Suspension / Bras)
     let techHtml = '';
     if (log.hands || log.fingers) {
         techHtml = `
@@ -689,12 +717,13 @@ function renderMuscuDetails(log) {
             </div>`;
     }
 
-    // 3. Affichage des stats (Condition élargie aux Pyramides)
+    // 3. Affichage des stats (Logique par type)
     let statsHtml = '';
-    // On vérifie si c'est 'Tractions' OU 'Pyramide Tractions'
-    const isTractionType = log.type === 'Tractions' || log.type === 'Pyramide Tractions';
+    
+    // Type "Répétitions" : Tractions et Pompes
+    const isRepBased = log.type === 'Tractions' || log.type === 'Pyramide Tractions' || log.type === 'Pompes';
 
-    if (isTractionType && log.avgWorkPerRep) {
+    if (isRepBased && log.avgWorkPerRep) {
         statsHtml = `
             <div class="grid grid-cols-2 gap-2 mb-3">
                 <div class="bg-violet-500/10 p-2 rounded-xl border border-violet-500/20 text-center">
@@ -707,7 +736,7 @@ function renderMuscuDetails(log) {
                 </div>
             </div>`;
     } else {
-        // Pour les Suspensions et Bras 90°
+        // Type "Temps" : Suspensions, Bras 90° et Gainage
         statsHtml = `
             <div class="grid grid-cols-3 gap-2 mb-3">
                 <div class="bg-slate-800/40 p-2 rounded-xl border border-slate-700 text-center">
@@ -874,16 +903,21 @@ function renderClimbingDetails(log) {
                 levelHeight: 0 
             };
         }
-        if (d.success) acc[d.level].success++;
-        else acc[d.level].fail++;
-        
+
         const att = parseInt(d.attempts || 1);
         const h = parseFloat(d.height || 0);
-
         acc[d.level].totalAttempts += att;
-        // On considère que la hauteur est parcourue à chaque essai (ou seulement au succès selon ta préférence)
-        // Ici, on multiplie par le nombre d'essais pour avoir le volume réel grimpé
-        acc[d.level].levelHeight += (h * att); 
+
+        if (d.success) {
+            acc[d.level].success++;
+            // Logique : (Nombre d'échecs avant * 1m) + (1 * Hauteur totale)
+            const distanceEchecs = (att - 1) * 1; 
+            acc[d.level].levelHeight += (distanceEchecs + h);
+        } else {
+            acc[d.level].fail++;
+            // Logique : Toutes les tentatives sont des échecs (1m chacune)
+            acc[d.level].levelHeight += (att * 1);
+        }
         
         return acc;
     }, {});
@@ -1362,7 +1396,7 @@ function renderCompetenceRadar(logs) {
             }
 
             // Force : On cherche le sommet le plus haut (le record)
-            if (l.type?.includes('Pyramide Tractions') && !l.isSemi) {
+            if (l.type?.includes('Pyramide Tractions') /*&& !l.isSemi*/) {
                 const sommet = parseInt(l.note?.match(/Sommet (\d+)/)?.[1]) || 0;
                 if (sommet > forceMax) forceMax = sommet;
             }
@@ -1543,7 +1577,7 @@ function renderRadarChart(logs, objectifs) {
             let mins = 0;
 
             if (label === 'Musculation') {
-                if (["Bras 90°", "Suspension", "Tractions"].includes(type)) {
+                if (["Bras 90°", "Suspension", "Tractions","Gainage","Pompes"].includes(type)) {
                     mins = ((parseInt(l.work) || 0) + (parseInt(l.rest) || 0)) * (parseInt(l.cycles) || 1) / 60;
                 } else if (type === "Pyramide Tractions") {
                     mins = (parseInt(l.totalReps) || 0) * (parseFloat(l.avgWorkPerRep) || 0) / 60;
@@ -2319,6 +2353,8 @@ function renderVolumeChart(logs) {
                         l.type === 'Bras 90°' || 
                         l.type === 'Suspension' || 
                         l.type === 'Tractions' || 
+                        l.type === 'Gainage' ||
+                        l.type === 'Pompes' ||
                         (l.type && l.type.includes('Tractions'))
                     );
                 }
@@ -3536,11 +3572,11 @@ const charts = [
     { id: 'statsChart', title: "Endurance (Repos/Rep)" },
     { id: 'blocEvolutionChart', title: 'Evolution niveau escalade (bloc)'},
     { id: 'voieEvolutionChart', title: 'Evolution niveau escalade (voie)'},
-    { id: 'volumeChart', title: "Volume Hebdomadaire" },
-    { id: 'fatigueChart', title: "Charge d'Entraînement (Fatigue)" },
     { id: 'scatterChart', title: "Flow State (Escalade)" },
+    { id: 'volumeChart', title: "Volume Hebdomadaire" },
     { id: 'radarChart', title: "Équilibre des Piliers" },
-    { id: 'radarChart2', title: "Profil" }
+    { id: 'radarChart2', title: "Profil" },
+    { id: 'fatigueChart', title: "Charge d'Entraînement (Fatigue)" }
 ];
 
 function changeChart(direction) {

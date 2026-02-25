@@ -113,6 +113,22 @@
                     </div>
                     <i data-lucide="chevron-right"></i>
                 </button>
+
+                <button onclick="loadExercise('pumps')" class="glass w-full p-6 rounded-3xl flex justify-between items-center group">
+                    <div class="text-left">
+                        <h3 class="font-bold text-lg group-hover:text-violet-400 transition-colors">Pompes</h3>
+                        <p class="text-xs text-slate-400">Classiques • Diamant • Larges • Cycles chrono</p>
+                    </div>
+                    <i data-lucide="chevron-right"></i>
+                </button>
+
+                <button onclick="loadExercise('core')" class="glass w-full p-6 rounded-3xl flex justify-between items-center group">
+                    <div class="text-left">
+                        <h3 class="font-bold text-lg group-hover:text-violet-400 transition-colors">Gainage</h3>
+                        <p class="text-xs text-slate-400">Planche • Latéral • Hollow Hold</p>
+                    </div>
+                    <i data-lucide="chevron-right"></i>
+                </button>
             </div>
 
             <div id="exercise-active" class="hidden">
@@ -465,9 +481,9 @@
                     <div id="wrapper-statsChart" class="chart-wrapper hidden w-full h-[350px] flex items-center justify-center"><canvas id="statsChart"></canvas></div>
                     <div id="wrapper-blocEvolutionChart" class="chart-wrapper hidden w-full h-[350px] flex items-center justify-center"><canvas id="blocEvolutionChart"></canvas></div>
                     <div id="wrapper-voieEvolutionChart" class="chart-wrapper hidden w-full h-[350px] flex items-center justify-center"><canvas id="voieEvolutionChart"></canvas></div>
+                    <div id="wrapper-scatterChart" class="chart-wrapper hidden w-full h-[350px] flex items-center justify-center"><canvas id="scatterChart"></canvas></div>
                     <div id="wrapper-volumeChart" class="chart-wrapper hidden w-full h-[350px] flex items-center justify-center"><canvas id="volumeChart"></canvas></div>
                     <div id="wrapper-fatigueChart" class="chart-wrapper hidden w-full h-[350px] flex items-center justify-center"><canvas id="fatigueChart"></canvas></div>
-                    <div id="wrapper-scatterChart" class="chart-wrapper hidden w-full h-[350px] flex items-center justify-center"><canvas id="scatterChart"></canvas></div>
                     <div id="wrapper-radarChart" class="chart-wrapper hidden w-full h-[350px] flex items-center justify-center">
                         <div style="width: 100%; max-width: 400px; height: 100%;">
                             <canvas id="radarChart"></canvas>
@@ -500,6 +516,8 @@
                 <button onclick="renderLogs('Musique')" class="text-[10px] bg-slate-800 px-3 py-1 rounded-full border border-white/10">Musique</button>
                 <button onclick="renderLogs('Étirement')" class="text-[10px] bg-slate-800 px-3 py-1 rounded-full border border-white/10">Zen</button>
                 <button onclick="renderLogs('Escalade')" class="text-[10px] bg-slate-800 px-3 py-1 rounded-full border border-white/10">Escalade</button>
+                <button onclick="renderLogs('Gainage')" class="text-[10px] bg-slate-800 px-3 py-1 rounded-full border border-white/10">Gainage</button>
+                <button onclick="renderLogs('Pompes')" class="text-[10px] bg-slate-800 px-3 py-1 rounded-full border border-white/10">Pompes</button>
             </div>
             <h3 class="text-xs font-bold text-slate-500 uppercase mb-4 tracking-widest">Dernières Séances</h3>
             <div id="log-list" class="space-y-3">
