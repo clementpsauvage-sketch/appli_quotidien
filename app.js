@@ -985,7 +985,27 @@ function renderClimbingDetails(log) {
 // --- MOTEUR 6 : REFLEXES ---
 
 function renderReflexeDetails(log) {
+    // On définit l'icône et le nom selon le variant enregistré
+    let badgeLabel = log.variant || 'Simple';
+    let iconName = 'zap'; // Par défaut pour "Simple"
+    let badgeColor = 'amber'; // Couleur par défaut
+
+    // Logique de sélection d'icône et de texte
+    if (badgeLabel.includes('Précision')) {
+        iconName = 'target';
+    } else if (badgeLabel.includes('Expert') || badgeLabel.includes('9 boutons')) {
+        iconName = 'trending-up'; // Ou 'shield-alert'
+        badgeLabel = '⚡ Expert Sélectif';
+    }
+
     return `
+        <div class="mb-3 flex justify-start">
+            <span class="bg-amber-500/10 text-amber-400 px-2 py-0.5 rounded text-[9px] uppercase font-bold border border-amber-500/30 flex items-center gap-1.5">
+                <i data-lucide="${iconName}" class="w-3 h-3"></i>
+                ${badgeLabel}
+            </span>
+        </div>
+
         <div class="grid grid-cols-3 gap-2 mb-3">
             <div class="bg-amber-500/10 p-2 rounded-xl border border-amber-500/20 text-center">
                 <p class="text-[9px] text-slate-500 uppercase">Médiane</p>
@@ -1439,8 +1459,9 @@ function renderReflexChart(logs) {
         return d.toLocaleDateString('fr-FR', {day: 'numeric', month: 'short'});
     });
 
-    const medianData = last15Logs.map(log => log.medianTime);
-    const bestData = last15Logs.map(log => log.bestTime);
+    const medianData = [...last15Logs].map(log => log.medianTime).reverse();
+    const bestData = [...last15Logs].map(log => log.bestTime).reverse();
+
 
     window.myReflexChart = new Chart(ctx, {
         type: 'line',
@@ -4695,14 +4716,36 @@ function startNewSeries() {
     reflexSession.limitValue = parseInt(document.getElementById('reflex-limit-value').value);
     reflexSession.uiMode = document.getElementById('reflex-ui-mode').value;
     
+    const grid = document.getElementById('choice-grid');
+    
+    if (reflexSession.uiMode.startsWith('choice')) {
+        const isNine = reflexSession.uiMode === 'choice-9';
+        const count = isNine ? 9 : 4;
+        const cols = isNine ? 'grid-cols-3' : 'grid-cols-2';
+        
+        grid.innerHTML = '';
+        // Ajustement de la largeur : 280px pour 9 boutons, sinon 220px
+        grid.className = `grid ${cols} gap-3 w-full ${isNine ? 'max-w-[280px]' : 'max-w-[220px]'}`;
+        
+        for (let i = 0; i < count; i++) {
+            const btn = document.createElement('div');
+            btn.id = `target-${i}`;
+            btn.className = "h-16 rounded-2xl bg-slate-800 border border-slate-700 transition-all pointer-events-none";
+            grid.appendChild(btn);
+        }
+        grid.classList.remove('hidden');
+    } else {
+        grid.classList.add('hidden');
+    }
+
+    // Gestion du timer
     if (reflexSession.limitType === 'time') {
         reflexSession.timerEnd = Date.now() + (reflexSession.limitValue * 1000);
     }
 
     document.getElementById('reflex-placeholder').classList.add('hidden');
     document.getElementById('reflex-series-stats').classList.remove('hidden');
-    if (reflexSession.uiMode === 'choice') document.getElementById('choice-grid').classList.remove('hidden');
-
+    
     prepareNextFlash();
 }
 
@@ -4718,8 +4761,13 @@ function prepareNextFlash() {
     }
 
     reflexSession.state = 'WAITING';
+    reflexSession.state = 'WAITING';
     resetTargets();
-    document.getElementById('reflex-container').style.backgroundColor = "transparent";
+    
+    // CORRECTION : On retire la classe de couleur au lieu de toucher au style
+    document.getElementById('reflex-container').classList.remove('bg-green-500/40');
+    
+    // ... (reste du code)
     document.getElementById('reflex-remaining').innerText = reflexSession.limitType === 'count' 
         ? (reflexSession.limitValue - reflexSession.countDone) 
         : Math.round((reflexSession.timerEnd - Date.now())/1000) + "s";
@@ -4731,27 +4779,31 @@ function prepareNextFlash() {
     }, delay);
 }
 
+
 function triggerFlash() {
     reflexSession.state = 'READY';
     reflexSession.startTime = performance.now();
     
     if (reflexSession.uiMode === 'classic') {
+        // CORRECTION : On utilise classList pour la couleur
         document.getElementById('reflex-container').classList.add('bg-green-500/40');
     } else {
-        activeTargetId = Math.floor(Math.random() * 4);
-        const target = document.getElementById(`target-${activeTargetId}`);
+        // On récupère tous les boutons créés dans la grille
+        const targets = document.querySelectorAll('#choice-grid div[id^="target-"]');
+        activeTargetId = Math.floor(Math.random() * targets.length);
         
+        const target = document.getElementById(`target-${activeTargetId}`);
         target.classList.replace('bg-slate-800', 'bg-amber-400');
         target.classList.add('shadow-[0_0_20px_rgba(251,191,36,0.6)]', 'scale-95');
         
-        // On rend la cible cliquable spécifiquement
         target.style.pointerEvents = "auto";
         target.onclick = (e) => {
-            e.stopPropagation(); // Empêche le clic de remonter au container
+            e.stopPropagation();
             processClick(false);
         };
     }
 }
+
 
 function processClick(tooEarly) {
     if (tooEarly) {
@@ -4769,12 +4821,16 @@ function processClick(tooEarly) {
 
 function resetTargets() {
     activeTargetId = null;
-    for (let i = 0; i < 4; i++) {
-        const t = document.getElementById(`target-${i}`);
-        t.className = "h-20 rounded-2xl bg-slate-800 border border-slate-700 transition-all pointer-events-none";
+    // On récupère TOUTES les cibles créées dans la grille
+    const targets = document.querySelectorAll('#choice-grid div[id^="target-"]');
+    
+    targets.forEach(t => {
+        // On remet le style d'origine (on utilise h-16 comme dans startNewSeries)
+        t.className = "h-16 rounded-2xl bg-slate-800 border border-slate-700 transition-all pointer-events-none";
         t.style.boxShadow = "none";
-        t.onclick = null; // On retire l'événement
-    }
+        t.style.transform = "none"; // Au cas où le scale-95 soit resté
+        t.onclick = null; 
+    });
 }
 
 function resetReflexUI() {
@@ -4795,17 +4851,20 @@ function finishSeries() {
     const sorted = [...reflexSession.results].sort((a,b) => a-b);
     const avg = Math.round(reflexSession.results.reduce((a,b) => a+b, 0) / reflexSession.results.length);
     const median = sorted[Math.floor(sorted.length/2)];
+
     
     const sessionData = {
         type: 'Réflexes',
-        variant: reflexSession.uiMode === 'classic' ? 'Simple' : 'Précision',
+        variant: reflexSession.uiMode === 'classic' ? 'Simple' : (reflexSession.uiMode === 'choice-4' ? 'Précision' : 'Expert' ),
         results: reflexSession.results,
         avgTime: avg,
         medianTime: median,
         bestTime: sorted[0],
+        // AJOUT : On stocke le nombre brut si besoin pour des stats futures
+        buttonCount: reflexSession.uiMode === 'classic' ? 1 : (reflexSession.uiMode === 'choice-9' ? 9 : 4),
         totalCount: reflexSession.results.length,
         date: new Date().toISOString(),
-        note: `Série de ${reflexSession.results.length} | Médiane: ${median}ms`
+        note: `Série de ${reflexSession.results.length} | Moyenne: ${avg} | Médiane: ${median}ms`
     };
 
     showMoodSelector(sessionData);

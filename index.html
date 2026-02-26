@@ -335,7 +335,8 @@
                     <label class="text-[10px] text-slate-500 uppercase ml-1">Mode Cible</label>
                     <select id="reflex-ui-mode" class="w-full bg-slate-800 p-2 rounded-xl text-xs mt-1 outline-none">
                         <option value="classic">Bouton Unique</option>
-                        <option value="choice">Grille (4 Boutons)</option>
+                        <option value="choice-4">Grille (4 Boutons)</option>
+                        <option value="choice-9">Grille (9 Boutons)</option>
                     </select>
                 </div>
                 <div class="col-span-1">
@@ -567,6 +568,7 @@
                 <button onclick="renderLogs('Escalade')" class="text-[10px] bg-slate-800 px-3 py-1 rounded-full border border-white/10">Escalade</button>
                 <button onclick="renderLogs('Gainage')" class="text-[10px] bg-slate-800 px-3 py-1 rounded-full border border-white/10">Gainage</button>
                 <button onclick="renderLogs('Pompes')" class="text-[10px] bg-slate-800 px-3 py-1 rounded-full border border-white/10">Pompes</button>
+                <button onclick="renderLogs('Réflexes')" class="text-[10px] bg-slate-800 px-3 py-1 rounded-full border border-white/10">Réflexes</button>
             </div>
             <h3 class="text-xs font-bold text-slate-500 uppercase mb-4 tracking-widest">Dernières Séances</h3>
             <div id="log-list" class="space-y-3">
