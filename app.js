@@ -4125,67 +4125,142 @@ function renderSchedule() {
 
     const days = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
     const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     
-    // Affichage de la date du jour
     dateDisplay.innerText = now.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
 
-    // Calcul de la Muscu (Tous les 2 jours)
-    // On prend une date de référence (ex: 1er Janvier 2024 qui était un Lundi)
-    const referenceDate = new Date(2024, 0, 1);
-    const diffTime = Math.abs(now - referenceDate);
-    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-    const isMuscuDay = diffDays % 2 === 0;
+    // --- LOGIQUE DE CYCLE (8 SEMAINES) ---
+    const cycleStartDate = new Date(2026, 2, 2); // À ajuster selon ta vraie date de début
+    const msPerDay = 24 * 60 * 60 * 1000;
+    const diffInMs = todayStart - cycleStartDate;
+    const currentWeekInCycle = (Math.floor(diffInMs / (msPerDay * 7)) % 8) + 1;
+    const cyclePhase = Math.ceil(currentWeekInCycle / 2); // Phase 1 (S1-2), 2 (S3-4), etc.
 
     let scheduleHTML = '';
 
-    // Génération pour les 3 prochains jours pour donner de la visibilité
     for (let i = 0; i < 3; i++) {
-        const d = new Date();
-        d.setDate(now.getDate() + i);
-        const dayName = days[d.getDay()];
+        const currentD = new Date(todayStart);
+        currentD.setDate(todayStart.getDate() + i);
+        const dayName = days[currentD.getDay()];
         const isToday = i === 0;
-        
-        // Détermination des activités
-        let activities = [];
-        
-        // 1. Muscu (tous les 2 jours)
-        if ((diffDays + i) % 2 === 0) activities.push({ label: "Musculation", icon: "armchair", color: "text-violet-400" });
 
-        // 2. Activités Fixes
-        if (dayName === 'Jeudi') activities.push({ label: "Escalade (Soir)", icon: "mountain", color: "text-emerald-400" });
-        if (dayName === 'Vendredi') activities.push({ label: "Musique (Soir)", icon: "music", color: "text-amber-400" });
-        if (dayName === 'Samedi' || dayName === 'Dimanche') {
-            if (i === 0 || (i > 0 && dayName === 'Samedi')) { // On ne l'affiche qu'une fois dans le weekend prévu
-                activities.push({ label: "Course prévue", icon: "timer", color: "text-blue-400" });
-            }
+        let activities = [];
+
+        // 1. ROUTINE MATIN (Quotidien)
+        activities.push({ 
+            label: "Réveil Articulaire + Gainage", 
+            icon: "sun", color: "text-amber-400", time: "07:30",
+            desc: "Routine 7min + 5min Gainage (30/30)" 
+        });
+
+        // 2. LOGIQUE MUSCULATION & SPORT
+        if (dayName === 'Lundi' || dayName === 'Mercredi') {
+            const workout = getLourdDetails(cyclePhase);
+            activities.push({ 
+                label: "Muscu : Lourd +10kg", icon: "dumbbell", color: "text-violet-400", time: "18:00",
+                desc: `${workout.series} | Tempo: ${workout.tempo} | + 4x15 Pompes`
+            });
+        } else if (dayName === 'Vendredi') {
+            const workout = getPyramideDetails(cyclePhase);
+            activities.push({ 
+                label: "Muscu : Pyramide PDC", icon: "trending-up", color: "text-emerald-400", time: "18:00",
+                desc: `Max: ${workout.montee} | Excentriques: 3x3 | + 4x15 Pompes`
+            });
         }
 
-        if (activities.length === 0) activities.push({ label: "Repos / Stretching", icon: "accessibility", color: "text-slate-500" });
+        // 3. ESCALADE (TENDONS)
+        if (dayName === 'Mardi' || dayName === 'Jeudi') {
+            activities.push({ 
+                label: "Escalade (Force Tendineuse)", icon: "mountain", color: "text-cyan-400", time: "19:00",
+                desc: "Focus technique et grip (pas de tractions lourdes)"
+            });
+        }
 
-        scheduleHTML += `
-            <div class="glass p-4 rounded-3xl border ${isToday ? 'border-violet-500/50 bg-violet-500/5' : 'border-white/5'}">
-                <div class="flex justify-between items-center mb-3">
-                    <span class="text-[10px] font-bold uppercase tracking-tighter ${isToday ? 'text-violet-400' : 'text-slate-500'}">
-                        ${isToday ? 'Aujourd\'hui' : dayName}
-                    </span>
-                    ${isToday ? '<span class="flex h-2 w-2 rounded-full bg-violet-500 animate-pulse"></span>' : ''}
-                </div>
-                <div class="space-y-3">
-                    ${activities.map(act => `
-                        <div class="flex items-center gap-3">
-                            <div class="w-8 h-8 rounded-xl bg-slate-800 flex items-center justify-center ${act.color}">
-                                <i data-lucide="${act.icon}" class="w-4 h-4"></i>
-                            </div>
-                            <span class="text-sm font-medium ${isToday ? 'text-white' : 'text-slate-400'}">${act.label}</span>
-                        </div>
-                    `).join('')}
-                </div>
-            </div>
-        `;
+        // 4. COURSE À PIED
+        if (['Mercredi', 'Samedi', 'Dimanche'].includes(dayName)) {
+            const typeCourse = dayName === 'Dimanche' ? "Course brève (Récup)" : "Session Course";
+            activities.push({ label: typeCourse, icon: "zap", color: "text-blue-400", time: "08:00" });
+        }
+
+        // 5. MUSIQUE
+        if (dayName === 'Vendredi') {
+            activities.push({ label: "Musique (Session)", icon: "music", color: "text-pink-400", time: "21:00" });
+        } else if (!['Samedi', 'Dimanche'].includes(dayName)) {
+            activities.push({ label: "Répétition Musique", icon: "mic-2", color: "text-pink-500/60", time: "19:30" });
+        }
+
+        // 6. SÉLECTION AUTOMATIQUE DE LA ROUTINE D'ÉTIREMENT (SOIR)
+        const stretching = getAutoStretching(dayName);
+        activities.push({ 
+            label: `Étirements : ${stretching.name}`, 
+            icon: "accessibility", color: "text-indigo-400", time: "22:00",
+            desc: `${stretching.duration} min | ${stretching.type}` 
+        });
+
+        activities.sort((a, b) => a.time.localeCompare(b.time));
+        scheduleHTML += renderCard(dayName, isToday, activities, currentWeekInCycle);
     }
 
     container.innerHTML = scheduleHTML;
     lucide.createIcons();
+}
+
+// --- LOGIQUE DE SÉLECTION D'ÉTIREMENTS ---
+function getAutoStretching(day) {
+    switch(day) {
+        case 'Lundi': case 'Mercredi': case 'Vendredi':
+            return { name: "Déblocage Avant-bras + Thorax", duration: 15, type: "Mixte/Récup" };
+        case 'Mardi': case 'Jeudi':
+            return { name: "Grimpeur : Mobilité Active", duration: 15, type: "Actif" };
+        case 'Samedi':
+            return { name: "Souplesse Spécial Grand Écart", duration: 33, type: "Intense" };
+        case 'Dimanche':
+            return { name: "Détente Soir (Sommeil)", duration: 20, type: "Passif" };
+        default:
+            return { name: "Quotidien Forme", duration: 10, type: "Mixte" };
+    }
+}
+
+// --- HELPERS MUSCU ---
+function getLourdDetails(p) {
+    const phases = [
+        { series: "4x4", tempo: "1-2s / 2-3s" }, // S1-2
+        { series: "5x4", tempo: "1-2s / 2-3s" }, // S3-4
+        { series: "5x5", tempo: "1-2s / 3s" },   // S5-6
+        { series: "5x5", tempo: "2s / 3s" }      // S7-8
+    ];
+    return phases[p-1] || phases[0];
+}
+
+function getPyramideDetails(p) {
+    const paliers = ["1 → 8", "1 → 10", "1 → 12", "1 → 15"];
+    return { montee: paliers[p-1] || "1 → 8" };
+}
+
+// --- RENDU HTML ---
+function renderCard(day, isToday, acts, week) {
+    return `
+        <div class="glass p-5 rounded-[2rem] border ${isToday ? 'border-violet-500/30 bg-violet-500/5' : 'border-white/5 opacity-60'} mb-6">
+            <div class="flex justify-between items-center mb-4">
+                <span class="text-[10px] font-black uppercase tracking-[0.2em] ${isToday ? 'text-violet-400' : 'text-slate-500'}">
+                    ${isToday ? 'Aujourd\'hui' : day} — Semaine ${week}/8
+                </span>
+            </div>
+            <div class="space-y-4">
+                ${acts.map(a => `
+                    <div class="flex items-start gap-4">
+                        <div class="w-10 h-10 rounded-xl bg-slate-950 border border-white/5 flex items-center justify-center ${a.color} flex-shrink-0">
+                            <i data-lucide="${a.icon}" class="w-5 h-5"></i>
+                        </div>
+                        <div>
+                            <div class="text-sm font-bold text-slate-200">${a.label} <span class="text-[10px] text-slate-500 ml-2">${a.time}</span></div>
+                            <div class="text-[11px] text-slate-500 leading-relaxed">${a.desc || ''}</div>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+        </div>
+    `;
 }
 
 
