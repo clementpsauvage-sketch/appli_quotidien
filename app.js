@@ -201,7 +201,9 @@ function displayJournalPage() {
             'Escalade': 'border-emerald-500/30 text-emerald-400 bg-emerald-500/10',
             'Course': 'border-blue-500/30 text-blue-400 bg-blue-500/10',
             'Musique': 'border-pink-500/30 text-pink-400 bg-pink-500/10',
-            'Étirement': 'border-violet-500/30 text-violet-400 bg-violet-500/10'
+            'Étirement': 'border-violet-500/30 text-violet-400 bg-violet-500/10',
+            'Réflexes' : 'border-yellow-500/30 text-yellow-400 bg-yellow-500/10',
+            'Sommeil' : 'border-indigo-500/30 text-indigo-400 bg-indigo-500/10'
         };
         const colorClass = typeColors[log.type] || 'border-slate-700 text-slate-400 bg-slate-800/50';
 
@@ -317,7 +319,16 @@ function loadExercise(type) {
                         <div class="col-span-1">
                             <label class="text-[10px] text-slate-500 uppercase ml-1">Doigts</label>
                             <select id="hang-fingers" class="w-full bg-slate-800 p-2 rounded-xl text-xs mt-1 outline-none">
-                                <option value="10">10 Doigts</option><option value="8">8 Doigts</option><option value="4">4 Doigts</option>
+                                <option value="10">10 Doigts</option>
+                                <option value="9">9 Doigts</option>
+                                <option value="8">8 Doigts</option>
+                                <option value="7">7 Doigts</option>
+                                <option value="6">6 Doigts</option>
+                                <option value="5">5 Doigts</option>
+                                <option value="4">4 Doigts</option>
+                                <option value="3">3 Doigts</option>
+                                <option value="2">2 Doigts</option>
+                                <option value="1">1 Doigt</option>
                             </select>
                         </div>
                         <div class="col-span-1">
@@ -2984,18 +2995,26 @@ function updateBpm(delta) {
     syncBpm(slider.value);
 }
 
-let tunerInterval;
-let analyser;
-let microphone;
+
+let audioContext = null;
+let analyser = null;
+let microphone = null;
+let stream = null; // On stocke le stream globalement
 
 async function toggleTuner() {
     const status = document.getElementById('tuner-status');
     const noteEl = document.getElementById('tuner-note');
     const btn = document.getElementById('btn-tuner');
 
-    if (analyser) {
-        // Stop Tuner
+    if (audioContext && audioContext.state !== 'closed') {
+        // STOP proprement
+        if (stream) {
+            stream.getTracks().forEach(track => track.stop()); // Éteint réellement le micro
+        }
+        await audioContext.close();
+        audioContext = null;
         analyser = null;
+        
         status.innerText = "Micro éteint";
         noteEl.innerText = "--";
         btn.innerText = "Activer";
@@ -3003,18 +3022,30 @@ async function toggleTuner() {
     }
 
     try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        const audioContext = new AudioContext();
+        // 1. Demander le flux
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        
+        // 2. Initialiser l'AudioContext (compatible iOS/Android)
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        
+        // 3. Forcer le démarrage (Crucial sur Mobile)
+        if (audioContext.state === 'suspended') {
+            await audioContext.resume();
+        }
+
         analyser = audioContext.createAnalyser();
+        analyser.fftSize = 2048;
+        
         microphone = audioContext.createMediaStreamSource(stream);
         microphone.connect(analyser);
-        analyser.fftSize = 2048;
         
         status.innerText = "À l'écoute...";
         btn.innerText = "Couper";
-        updateTuner();
+        
+        updateTuner(); 
     } catch (err) {
-        alert("Microphone refusé ou non disponible.");
+        console.error(err);
+        alert("Microphone refusé : vérifiez les autorisations dans les réglages du téléphone.");
     }
 }
 
