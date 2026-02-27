@@ -1442,7 +1442,7 @@ function renderReflexChart(logs) {
     // Prendre les 15 derniers et créer les labels proprement
     const last15Logs = reflexLogs.slice(-15);
 
-    const labels = last15Logs.map(log => {
+    const labels = [...last15Logs].map(log => {
     // 1. On récupère la valeur brute (date ou timestamp)
     let dateValue = log.timestamp || log.date;
     
@@ -1468,7 +1468,7 @@ function renderReflexChart(logs) {
         if (isNaN(d.getTime())) return "??";
         
         return d.toLocaleDateString('fr-FR', {day: 'numeric', month: 'short'});
-    });
+    }).reverse();
 
     const medianData = [...last15Logs].map(log => log.medianTime).reverse();
     const bestData = [...last15Logs].map(log => log.bestTime).reverse();
@@ -1845,7 +1845,8 @@ function renderFatigueChart(logs) {
             .filter(l => 
                 l.timestamp.startsWith(date) && 
                 l.type !== "Musique" && 
-                l.type !== "Étirement"
+                l.type !== "Étirement" &&
+                l.type !== "Réflexes"
             )
             .reduce((sum, l) => sum + (l.mood || 0), 0);
     });
