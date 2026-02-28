@@ -23,6 +23,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // --- RÉCUPÉRATION ESCALADE ---
     // Cette fonction vérifie si une séance était en cours dans le LocalStorage
     restoreClimbSession();
+    restoreLibreSession(); // AJOUT ICI
 
     // VERIFICATION CHRONO MUSIQUE EN COURS
     // RÉCUPÉRATION COURSE
@@ -1034,6 +1035,32 @@ function renderReflexeDetails(log) {
     `;
 }
 
+// --- MOTEUR 7 : AUTRE ---
+
+function renderAutreDetails(log) {
+    // On s'assure d'avoir des valeurs par défaut si le log est ancien ou mal formé
+    const name = log.activityName || "Activité";
+    const duration = log.duration || 0;
+    const intensity = log.intensity || "N/A";
+
+    return `
+        <div class="flex flex-wrap gap-2 items-center">
+            <div class="bg-blue-500/20 text-blue-400 text-[10px] px-3 py-1 rounded-full font-bold uppercase tracking-wider border border-blue-500/30">
+                ${name}
+            </div>
+            
+            <div class="bg-slate-800 text-slate-400 text-[10px] px-2 py-1 rounded-md border border-slate-700">
+                ${intensity}
+            </div>
+        </div>
+        
+        <div class="mt-2 flex items-center gap-1 text-slate-400">
+            <i data-lucide="timer" class="w-3 h-3 text-blue-500"></i>
+            <span class="text-xs font-medium">${duration} minutes</span>
+        </div>
+    `;
+}
+
 let showAllLogs = false; // Variable indépendante
 
 async function renderLogs(filter = 'all') {
@@ -1073,6 +1100,7 @@ async function renderLogs(filter = 'all') {
             case 'Étirement': specificContent = renderStretchDetails(log); break;
             case 'Escalade': specificContent = renderClimbingDetails(log); break;
             case 'Réflexes': specificContent = renderReflexeDetails(log); break;
+            case 'Autre' : specificContent = renderAutreDetails(log); break;
             default: specificContent = renderMuscuDetails(log);
         }
 
@@ -3228,7 +3256,7 @@ const STRETCH_DATA = {
     ]},
 // 33 min manque des min
     "Souplesse Spécial Grand Écart": { "type": "Mixte", "duration": 33, 
-        "tags": ["Mixte", "Long", "Hanches"],
+        "tags": ["Mixte", "Long", "Hanches","Hebdomadaire"],
         "exos": [
         // --- Préparation & Ischios (6 min / 360s) ---
         { "name": "Fente Flexion Ischio (G)", "d": 90, "img": "stretch-vertical" },
@@ -4981,5 +5009,172 @@ function finishSeries() {
 // Variable pour stocker l'ID de la cible active
 
 
+// --- Dernière fonctionnalité -------
 
 
+// --- AUTRES ---
+
+// --- VARIABLES SESSION LIBRE ---
+
+let selectedLibreIntensity = "Modéré";
+
+// --- VARIABLES SESSION LIBRE AMÉLIORÉES ---
+let libreTimer = null;
+let isLibreRunning = false;
+let libreStartTime = 0; // Timestamp de début
+let libreSecondsBeforePause = 0; // Cumul si on fait pause
+
+function toggleLibreChrono() {
+    const btnStart = document.getElementById('btn-libre-start');
+    const btnStop = document.getElementById('btn-libre-stop');
+    const nameInput = document.getElementById('libre-name');
+
+    if (!isLibreRunning) {
+        if (nameInput.value.trim() === "") {
+            alert("Donne un nom à ton activité !");
+            return;
+        }
+        
+        // DÉMARRAGE
+        isLibreRunning = true;
+        libreStartTime = Date.now();
+        
+        // Sauvegarde pour la survie (LocalStorage)
+        localStorage.setItem('libre_isRunning', 'true');
+        localStorage.setItem('libre_startTime', libreStartTime);
+        localStorage.setItem('libre_name', nameInput.value);
+        localStorage.setItem('libre_secondsBeforePause', libreSecondsBeforePause);
+
+        btnStart.innerText = "Pause";
+        btnStop.classList.remove('hidden');
+        nameInput.disabled = true;
+
+        launchLibreInterval();
+    } else {
+        // PAUSE
+        isLibreRunning = false;
+        clearInterval(libreTimer);
+        
+        // On calcule le temps parcouru et on le stocke
+        libreSecondsBeforePause += Math.floor((Date.now() - libreStartTime) / 1000);
+        
+        localStorage.setItem('libre_isRunning', 'false');
+        localStorage.setItem('libre_secondsBeforePause', libreSecondsBeforePause);
+        
+        btnStart.innerText = "Reprendre";
+    }
+}
+
+function launchLibreInterval() {
+    clearInterval(libreTimer);
+    libreTimer = setInterval(() => {
+        const now = Date.now();
+        const totalSeconds = libreSecondsBeforePause + Math.floor((now - libreStartTime) / 1000);
+        updateLibreDisplay(totalSeconds);
+    }, 1000);
+}
+
+function updateLibreDisplay(totalSec) {
+    const hrs = Math.floor(totalSec / 3600);
+    const mins = Math.floor((totalSec % 3600) / 60);
+    const secs = totalSec % 60;
+    document.getElementById('libre-chrono').innerText = 
+        `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+}
+
+function setLibreIntensity(level) {
+    selectedLibreIntensity = level;
+    // Petit feedback visuel sur les boutons
+    document.querySelectorAll('.intensity-btn').forEach(btn => {
+        btn.classList.remove('border', 'border-blue-500');
+        if(btn.innerText === level) btn.classList.add('border', 'border-blue-500');
+    });
+}
+
+function stopLibreSession() {
+    // Calcul du total des secondes accumulées jusqu'à maintenant
+    const now = isLibreRunning ? Date.now() : 0;
+    const currentSessionSec = isLibreRunning ? Math.floor((now - libreStartTime) / 1000) : 0;
+    const totalSec = libreSecondsBeforePause + currentSessionSec;
+
+    if (totalSec < 5) { 
+        if(!confirm("Session trop courte. Annuler ?")) return;
+        resetLibreUI();
+        return;
+    }
+
+    // 1. Arrêt du chrono
+    clearInterval(libreTimer);
+    isLibreRunning = false;
+
+    // 2. Affichage des champs d'intensité
+    document.getElementById('libre-finish-fields').classList.remove('hidden');
+    
+    // 3. Transformation du bouton pour la validation finale
+    const btnStop = document.getElementById('btn-libre-stop');
+    btnStop.innerText = "Valider & Enregistrer";
+    
+    // Correction cruciale : on utilise une fonction fléchée pour passer le temps total
+    btnStop.onclick = () => finalizeAndSaveLibre(totalSec); 
+}
+
+function finalizeAndSaveLibre(totalSec) {
+    const name = document.getElementById('libre-name').value;
+    // On convertit les secondes en minutes pour le journal
+    const durationMin = Math.max(1, Math.round(totalSec / 60));
+
+    const sessionData = {
+        type: 'Autre',
+        activityName: name,
+        duration: durationMin,
+        intensity: selectedLibreIntensity,
+        date: new Date().toISOString(),
+        note: `${name} (${durationMin} min) - Intensité: ${selectedLibreIntensity}`
+    };
+
+    showMoodSelector(sessionData); 
+    resetLibreUI();
+}
+
+function resetLibreUI() {
+    clearInterval(libreTimer);
+    localStorage.removeItem('libre_isRunning');
+    localStorage.removeItem('libre_startTime');
+    localStorage.removeItem('libre_name');
+    localStorage.removeItem('libre_secondsBeforePause');
+    
+    isLibreRunning = false;
+    libreSecondsBeforePause = 0;
+    isLibreRunning = false;
+    updateLibreDisplay();
+    
+    document.getElementById('libre-name').value = "";
+    document.getElementById('libre-name').disabled = false;
+    document.getElementById('btn-libre-start').innerText = "Démarrer";
+    document.getElementById('btn-libre-start').className = "flex-1 bg-blue-500 text-white py-4 rounded-2xl font-bold shadow-lg shadow-blue-500/20 active:scale-95 transition-all";
+    document.getElementById('btn-libre-stop').classList.add('hidden');
+    document.getElementById('libre-status').innerText = "En attente";
+    document.getElementById('libre-status').className = "text-[10px] uppercase bg-slate-800 px-2 py-1 rounded-full text-slate-400";
+}
+
+function restoreLibreSession() {
+    const savedIsRunning = localStorage.getItem('libre_isRunning') === 'true';
+    const savedName = localStorage.getItem('libre_name');
+    libreSecondsBeforePause = parseInt(localStorage.getItem('libre_secondsBeforePause')) || 0;
+    libreStartTime = parseInt(localStorage.getItem('libre_startTime'));
+
+    if (!savedName) return; // Rien à restaurer
+
+    document.getElementById('libre-name').value = savedName;
+    document.getElementById('libre-name').disabled = true;
+    document.getElementById('btn-libre-stop').classList.remove('hidden');
+
+    if (savedIsRunning && libreStartTime) {
+        isLibreRunning = true;
+        document.getElementById('btn-libre-start').innerText = "Pause";
+        launchLibreInterval();
+    } else {
+        updateLibreDisplay(libreSecondsBeforePause);
+        document.getElementById('btn-libre-start').innerText = "Reprendre";
+    }
+}

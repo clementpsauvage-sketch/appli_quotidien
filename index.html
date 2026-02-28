@@ -322,6 +322,45 @@
             </div>
         </section>
 
+        <section id="section-libre" class="hidden space-y-4">
+            <div class="flex items-center justify-between mb-2">
+                <h2 class="text-xl font-bold text-blue-400">Session Libre</h2>
+                <div id="libre-status" class="text-[10px] uppercase bg-slate-800 px-2 py-1 rounded-full text-slate-400">En attente</div>
+            </div>
+
+            <div class="glass p-5 rounded-3xl space-y-4">
+                <div>
+                    <label class="text-[10px] text-slate-500 uppercase ml-1">Type d'activité</label>
+                    <input type="text" id="libre-name" placeholder="Ex: Foot, Vélo, Muscu..." 
+                        class="w-full bg-slate-800 p-3 rounded-2xl text-sm mt-1 outline-none border border-transparent focus:border-blue-500 transition-all">
+                </div>
+
+                <div class="text-center py-4">
+                    <div id="libre-chrono" class="text-5xl font-mono font-light mb-6">00:00:00</div>
+                    
+                    <div class="flex gap-3">
+                        <button id="btn-libre-start" onclick="toggleLibreChrono()" 
+                            class="flex-1 bg-blue-500 text-white py-4 rounded-2xl font-bold shadow-lg shadow-blue-500/20 active:scale-95 transition-all">
+                            Démarrer
+                        </button>
+                        <button id="btn-libre-stop" onclick="stopLibreSession()" 
+                            class="hidden flex-1 bg-red-500 text-white py-4 rounded-2xl font-bold active:scale-95 transition-all">
+                            Terminer
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="libre-finish-fields" class="hidden glass p-5 rounded-3xl animate-in fade-in duration-300">
+                <label class="text-[10px] text-slate-500 uppercase ml-1">Intensité de l'effort</label>
+                <div class="grid grid-cols-3 gap-2 mt-2">
+                    <button onclick="setLibreIntensity('Faible')" class="intensity-btn bg-slate-800 p-2 rounded-xl text-xs">Faible</button>
+                    <button onclick="setLibreIntensity('Modéré')" class="intensity-btn bg-slate-800 p-2 rounded-xl text-xs border border-blue-500/50">Modéré</button>
+                    <button onclick="setLibreIntensity('Intense')" class="intensity-btn bg-slate-800 p-2 rounded-xl text-xs">Intense</button>
+                </div>
+            </div>
+        </section>
+
         <section id="section-reflexes" class="hidden space-y-4">
             <div class="flex items-center justify-between mb-2">
                 <h2 class="text-xl font-bold text-amber-400">Réflexes</h2>
@@ -747,6 +786,11 @@
         <button onclick="showSection('reflexes')" class="flex-shrink-0 flex flex-col items-center gap-1 text-slate-400 group">
             <i data-lucide="zap" class="w-6 h-6"></i><!--group-hover:text-amber-400 transition-colors-->
             <span class="text-[10px]">Réflexes</span>
+        </button>
+
+        <button onclick="showSection('libre')" class="flex-shrink-0 flex flex-col items-center gap-1 text-slate-400 group">
+            <i data-lucide="activity" class="w-6 h-6"></i>
+            <span class="text-[10px]">Divers</span>
         </button>
 
         <button onclick="showSection('sommeil')" class="flex-shrink-0 flex flex-col items-center gap-1 text-slate-400">
