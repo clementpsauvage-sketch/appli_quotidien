@@ -1468,9 +1468,9 @@ function renderReflexChart(logs) {
     if (reflexLogs.length === 0) return;
 
     // Prendre les 15 derniers et créer les labels proprement
-    const last15Logs = reflexLogs.slice(-15);
+    const last15Logs = [...reflexLogs].reverse().slice(-15);
 
-    const labels = [...last15Logs].map(log => {
+    const labels = last15Logs.map(log => {
     // 1. On récupère la valeur brute (date ou timestamp)
     let dateValue = log.timestamp || log.date;
     
@@ -1496,10 +1496,10 @@ function renderReflexChart(logs) {
         if (isNaN(d.getTime())) return "??";
         
         return d.toLocaleDateString('fr-FR', {day: 'numeric', month: 'short'});
-    }).reverse();
+    });
 
-    const medianData = [...last15Logs].map(log => log.medianTime).reverse();
-    const bestData = [...last15Logs].map(log => log.bestTime).reverse();
+    const medianData = [...last15Logs].map(log => log.medianTime);
+    const bestData = [...last15Logs].map(log => log.bestTime);
 
 
     window.myReflexChart = new Chart(ctx, {
