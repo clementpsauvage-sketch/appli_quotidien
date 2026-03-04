@@ -544,6 +544,7 @@
                         <p id="chart-title" class="text-[10px] text-slate-500 uppercase font-bold tracking-widest">
                             Évolution du Ressenti
                         </p>
+
                         <div id="week-nav" class="hidden flex items-center gap-3 mt-1">
                             <button onclick="changeWeek(-1)" class="p-1 hover:text-violet-400 text-slate-500 transition-colors">
                                 <i data-lucide="arrow-left" class="w-4 h-4"></i>
@@ -551,6 +552,16 @@
                             <span id="radar-period-title" class="text-[11px] text-violet-400 font-medium italic">Cette semaine</span>
                             <button onclick="changeWeek(1)" class="p-1 hover:text-violet-400 text-slate-500 transition-colors">
                                 <i data-lucide="arrow-right" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+
+                        <div id="reflex-nav" class="hidden flex items-center gap-3 mt-1">
+                            <button onclick="changeReflexMode(-1)" class="p-1 hover:text-amber-400 text-slate-500 transition-colors">
+                                <i data-lucide="chevron-left" class="w-4 h-4"></i>
+                            </button>
+                            <span id="reflex-mode-title" class="text-[11px] text-amber-400 font-medium italic">Global</span>
+                            <button onclick="changeReflexMode(1)" class="p-1 hover:text-amber-400 text-slate-500 transition-colors">
+                                <i data-lucide="chevron-right" class="w-4 h-4"></i>
                             </button>
                         </div>
                     </div>
@@ -605,6 +616,7 @@
                 <button onclick="renderLogs('Gainage')" class="text-[10px] bg-slate-800 px-3 py-1 rounded-full border border-white/10">Gainage</button>
                 <button onclick="renderLogs('Pompes')" class="text-[10px] bg-slate-800 px-3 py-1 rounded-full border border-white/10">Pompes</button>
                 <button onclick="renderLogs('Réflexes')" class="text-[10px] bg-slate-800 px-3 py-1 rounded-full border border-white/10">Réflexes</button>
+                <button onclick="renderLogs('Autre')" class="text-[10px] bg-slate-800 px-3 py-1 rounded-full border border-white/10">Autre</button>
             </div>
             <h3 class="text-xs font-bold text-slate-500 uppercase mb-4 tracking-widest">Dernières Séances</h3>
             <div id="log-list" class="space-y-3">

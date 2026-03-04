@@ -684,6 +684,7 @@ function showMoodSelector(data) {
     `;
 
     if (window.lucide) lucide.createIcons();
+    updateStatsDashboard();
 }
 
 function finalSave(jsonStr, moodScore) {
@@ -1220,6 +1221,7 @@ async function updateStatsDashboard() {
         console.log("Aucune donnée pour les stats");
         return;
     }
+    window.lastLoadedLogs = allLogs;
 
     // 2. PRÉPARATION DES FILTRES (POUR LES GRAPHS SPÉCIFIQUES)
     const limit = document.getElementById('stats-limit')?.value || 'all';
@@ -1455,52 +1457,53 @@ function renderArmBalanceChart(data) {
     });
 }
 
+let currentReflexModeIndex = 0;
+const reflexModes = [
+    { label: 'Global', filter: (l) => true },
+    { label: 'Mode Simple', filter: (l) => l.variant === 'Simple' || l.mode === 'Simple' },
+    { label: 'Mode Précision', filter: (l) => l.variant === 'Précision' || l.mode === 'Précision' },
+    { label: 'Mode Expert', filter: (l) => l.variant === 'Expert' || l.mode === 'Expert' }
+];
+
+// Cette fonction est appelée par les flèches internes du graphique réflexe
+function changeReflexMode(direction) {
+    currentReflexModeIndex += direction;
+    if (currentReflexModeIndex < 0) currentReflexModeIndex = reflexModes.length - 1;
+    if (currentReflexModeIndex >= reflexModes.length) currentReflexModeIndex = 0;
+    
+    // On met à jour le titre interne et on redessine
+    document.getElementById('reflex-mode-title').innerText = reflexModes[currentReflexModeIndex].label;
+    
+    // On récupère les logs globaux (assure-toi que 'allLogs' est accessible ou passe-le en paramètre)
+    renderReflexChart(window.lastLoadedLogs); 
+}
+
 function renderReflexChart(logs) {
+
     const canvas = document.getElementById('reflexChart');
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
 
     if (window.myReflexChart) window.myReflexChart.destroy();
 
-    // Filtrer les logs Réflexes
-    const reflexLogs = logs.filter(log => log.type === 'Réflexes');
 
-    if (reflexLogs.length === 0) return;
-
-    // Prendre les 15 derniers et créer les labels proprement
-    const last15Logs = [...reflexLogs].reverse().slice(-15);
-
-    const labels = last15Logs.map(log => {
-    // 1. On récupère la valeur brute (date ou timestamp)
-    let dateValue = log.timestamp || log.date;
+    const currentMode = reflexModes[currentReflexModeIndex];
     
-    // 2. Si c'est au format "DD/MM/YYYY" (ex: 24/05/2024), 
-    // JS ne sait pas le lire. On doit le transformer en "YYYY-MM-DD"
-    if (typeof dateValue === 'string' && dateValue.includes('/')) {
-            const parts = dateValue.split('/');
-            if (parts.length === 3) {
-                // Transforme "24/05/2024" en "2024-05-24"
-                dateValue = `${parts[2]}-${parts[1]}-${parts[0]}`;
-            }
-        }
+    // Filtrage : Type Réflexes + le mode choisi
+    const filterFirst = logs
+        .filter(log => log.type === 'Réflexes')
+        .filter(currentMode.filter)
 
-        const d = new Date(dateValue);
-        
-        // 3. Si c'est toujours invalide, on essaie de voir si c'est un nombre (timestamp Unix)
-        if (isNaN(d.getTime()) && !isNaN(dateValue)) {
-            const d2 = new Date(parseInt(dateValue));
-            if (!isNaN(d2.getTime())) return d2.toLocaleDateString('fr-FR', {day: 'numeric', month: 'short'});
-        }
+    const filteredLogs = [...filterFirst].reverse().slice(-15);
+    if (filteredLogs.length === 0) {
+        // Optionnel : afficher un message "Pas de données" sur le canvas
+        return;
+    }
 
-        // Retour final sécurisé
-        if (isNaN(d.getTime())) return "??";
-        
-        return d.toLocaleDateString('fr-FR', {day: 'numeric', month: 'short'});
+    const labels = filteredLogs.map(log => {
+        let d = new Date(log.timestamp || log.date);
+        return isNaN(d.getTime()) ? "??" : d.toLocaleDateString('fr-FR', {day: 'numeric', month: 'short'});
     });
-
-    const medianData = [...last15Logs].map(log => log.medianTime);
-    const bestData = [...last15Logs].map(log => log.bestTime);
-
 
     window.myReflexChart = new Chart(ctx, {
         type: 'line',
@@ -1509,22 +1512,27 @@ function renderReflexChart(logs) {
             datasets: [
                 {
                     label: 'Médiane (ms)',
-                    data: medianData,
+                    data: filteredLogs.map(l => l.medianTime),
                     borderColor: '#fbbf24',
                     backgroundColor: 'rgba(251, 191, 36, 0.1)',
                     fill: true,
-                    tension: 0.4,
-                    borderWidth: 3,
-                    pointRadius: 3
+                    tension: 0.4
+                },
+                {
+                    label: 'Moyenne (ms)',
+                    data: filteredLogs.map(l => l.avgTime || l.averageTime),
+                    borderColor: '#3b82f6',
+                    borderDash: [8, 8],
+                    tension: 0.4
                 },
                 {
                     label: 'Record (ms)',
-                    data: bestData,
-                    borderColor: '#a78bfa',
-                    borderDash: [5, 5],
-                    tension: 0.4,
-                    borderWidth: 2,
-                    pointRadius: 0
+                    data: filteredLogs.map(l => l.bestTime),
+                    borderColor: '#a78bfa', // Violet
+                    borderDash: [5,5],
+                    pointRadius: 0,
+                    fill: false,
+                    tension: 0.4
                 }
             ]
         },
@@ -1532,22 +1540,11 @@ function renderReflexChart(logs) {
             responsive: true,
             maintainAspectRatio: false,
             scales: {
-                y: {
-                    reverse: true, // IMPORTANT pour les réflexes : plus le temps est bas, plus la courbe monte
-                    grid: { color: 'rgba(255,255,255,0.05)' },
-                    ticks: { color: '#94a3b8' }
-                },
-                x: {
-                    grid: { display: false },
-                    ticks: { color: '#94a3b8', font: { size: 9 } }
-                }
+                y: { reverse: true, grid: { color: 'rgba(255,255,255,0.05)' } },
+                x: { grid: { display: false } }
             },
             plugins: {
-                legend: { 
-                    display: true, 
-                    position: 'top',
-                    labels: { color: '#94a3b8', boxWidth: 10, font: { size: 10 } } 
-                }
+                legend: { display: true, position: 'top', labels: { color: '#94a3b8', font: {size: 10} } }
             }
         }
     });
@@ -3821,6 +3818,14 @@ function changeChart(direction) {
         weekNav.classList.remove('hidden');
     } else {
         weekNav.classList.add('hidden');
+    }
+
+    // Gestion du menu Réflexes
+    const reflexNav = document.getElementById('reflex-nav');
+    if (activeChart.id === 'reflexChart') {
+        reflexNav?.classList.remove('hidden');
+    } else {
+        reflexNav?.classList.add('hidden');
     }
 
     // 4. Redessiner les données
